@@ -93,7 +93,7 @@ class Todo {
     }
 
     // 2. Kiểm tra Title: bắt buộc không được rỗng
-    final title = json['title']?.toString()?.trim() ?? '';
+    final title = json['title']?.toString().trim() ?? '';
     if (title.isEmpty) {
       throw const FormatException('Invalid or empty todo title');
     }

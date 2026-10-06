@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:todo_app/domain/models/todo_draft.dart';
-import 'package:todo_app/domain/models/todo_filter.dart';
 import 'package:todo_app/ui/core/theme/app_theme.dart';
 import 'package:todo_app/ui/features/todo/view_models/todo_view_model.dart';
 import 'package:todo_app/ui/features/todo/views/home_screen.dart';
