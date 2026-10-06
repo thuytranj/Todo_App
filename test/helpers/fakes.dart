@@ -40,6 +40,9 @@ class FakeStorageService implements StorageService {
 
 /// Fake implementation của [NotificationService] ghi nhận các lệnh gọi đặt lịch và hủy lịch.
 class FakeNotificationService implements NotificationService {
+  @override
+  void Function(int todoId)? onNotificationTapped;
+
   bool isInitialized = false;
   bool permissionStatus = true;
   bool generalPermissionRequested = false;

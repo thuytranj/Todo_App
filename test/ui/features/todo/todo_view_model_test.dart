@@ -224,5 +224,47 @@ void main() {
         viewModel.dispose();
       });
     });
+
+    test('handleNotificationTap chuyển đúng filter, xóa query, đặt highlight và tự xóa sau 3s', () {
+      fakeAsync((async) {
+        final upcomingTask = Todo(
+          id: 42,
+          title: 'Doctor Appointment',
+          dueDate: currentTime.add(const Duration(days: 3)),
+          hasTime: true,
+          createdAt: currentTime,
+        );
+
+        final customStorage = FakeStorageService(initialTodos: [upcomingTask]);
+        final viewModel = TodoViewModel(
+          storageService: customStorage,
+          notificationService: notification,
+          clock: clock,
+        );
+
+        viewModel.initialize();
+        async.flushMicrotasks();
+
+        // Giả lập người dùng đang ở tab Today và đang gõ search query
+        viewModel.setFilter(TodoFilter.today);
+        viewModel.setQuery('random query');
+        expect(viewModel.currentFilter, TodoFilter.today);
+        expect(viewModel.searchQuery, 'random query');
+
+        // Khi người dùng bấm vào thông báo của task ID 42
+        viewModel.handleNotificationTap(42);
+
+        // Đảm bảo đã chuyển sang tab Upcoming, search query bị xóa và ID được highlight
+        expect(viewModel.currentFilter, TodoFilter.upcoming);
+        expect(viewModel.searchQuery, isEmpty);
+        expect(viewModel.highlightedTaskId, 42);
+
+        // Sau 3 giây, highlight tự động được xóa về null
+        async.elapse(const Duration(seconds: 3));
+        expect(viewModel.highlightedTaskId, isNull);
+
+        viewModel.dispose();
+      });
+    });
   });
 }

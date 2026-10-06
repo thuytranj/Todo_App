@@ -21,6 +21,9 @@ Future<void> main() async {
     notificationService: notificationService,
   );
 
+  // Đăng ký callback khi chạm vào thông báo để ViewModel điều hướng và highlight công việc
+  notificationService.onNotificationTapped = viewModel.handleNotificationTap;
+
   // Nạp dữ liệu và kiểm tra quyền thông báo khi mở ứng dụng
   await viewModel.initialize();
 

@@ -38,6 +38,9 @@ abstract class NotificationService {
 
   /// Đặt lại lịch cho danh sách task active khi mở app (tối đa 64 task gần nhất).
   Future<void> rescheduleAll(List<Todo> todos, DateTime now);
+
+  /// Callback khi người dùng chạm vào thông báo trên thanh trạng thái hoặc màn hình khóa
+  void Function(int todoId)? onNotificationTapped;
 }
 
 /// Triển khai thực tế của [NotificationService] sử dụng [flutter_local_notifications]
@@ -51,6 +54,9 @@ class FlutterLocalNotificationService implements NotificationService {
   final FlutterLocalNotificationsPlugin _plugin;
   final Future<String> Function() _timezoneProvider;
   bool _isInitialized = false;
+
+  @override
+  void Function(int todoId)? onNotificationTapped;
 
   FlutterLocalNotificationService({
     FlutterLocalNotificationsPlugin? plugin,
@@ -90,7 +96,35 @@ class FlutterLocalNotificationService implements NotificationService {
       iOS: iosSettings,
     );
 
-    await _plugin.initialize(settings: initSettings);
+    await _plugin.initialize(
+      settings: initSettings,
+      onDidReceiveNotificationResponse: (NotificationResponse response) {
+        final payload = response.payload;
+        if (payload != null) {
+          final id = int.tryParse(payload);
+          if (id != null) {
+            onNotificationTapped?.call(id);
+          }
+        }
+      },
+    );
+
+    // Kiểm tra nếu ứng dụng được mở lên do người dùng chạm vào thông báo từ trạng thái đóng hoàn toàn (Cold Start)
+    try {
+      final launchDetails = await _plugin.getNotificationAppLaunchDetails();
+      if (launchDetails?.didNotificationLaunchApp ?? false) {
+        final payload = launchDetails?.notificationResponse?.payload;
+        if (payload != null) {
+          final id = int.tryParse(payload);
+          if (id != null) {
+            Future.microtask(() => onNotificationTapped?.call(id));
+          }
+        }
+      }
+    } catch (_) {
+      // Bỏ qua lỗi nếu nền tảng không hỗ trợ truy xuất launch details
+    }
+
     _isInitialized = true;
   }
 
@@ -186,6 +220,7 @@ class FlutterLocalNotificationService implements NotificationService {
         body: body,
         scheduledDate: tzScheduledDate,
         notificationDetails: details,
+        payload: id.toString(), // Truyền ID làm payload để nhận diện task khi người dùng bấm vào thông báo
         androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
       );
     } catch (_) {

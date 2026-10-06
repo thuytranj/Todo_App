@@ -12,27 +12,38 @@ class PermissionBanner extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final backgroundColor =
+        isDark ? const Color(0xFF2E2200) : const Color(0xFFFFF3CD);
+    final borderColor =
+        isDark ? const Color(0xFF543E00) : const Color(0xFFFFEEBA);
+    final contentColor =
+        isDark ? const Color(0xFFFFD54F) : const Color(0xFF856404);
+    final buttonBg =
+        isDark ? const Color(0xFFFFC107) : const Color(0xFF856404);
+    final buttonTextColor = isDark ? const Color(0xFF212121) : Colors.white;
+
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       decoration: BoxDecoration(
-        color: const Color(0xFFFFF3CD), // Màu vàng cam cảnh báo dịu
+        color: backgroundColor, // Màu nền dịu thích ứng theo theme
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: const Color(0xFFFFEEBA)),
+        border: Border.all(color: borderColor),
       ),
       child: Row(
         children: [
-          const Icon(
+          Icon(
             Icons.notifications_off_outlined,
-            color: Color(0xFF856404),
+            color: contentColor,
             size: 24,
           ),
           const SizedBox(width: 12),
-          const Expanded(
+          Expanded(
             child: Text(
               'Notifications are disabled. You will not receive reminders.',
               style: TextStyle(
-                color: Color(0xFF856404),
+                color: contentColor,
                 fontSize: 13,
                 fontWeight: FontWeight.w500,
               ),
@@ -44,8 +55,8 @@ class PermissionBanner extends StatelessWidget {
             style: TextButton.styleFrom(
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
               minimumSize: const Size(0, 36),
-              backgroundColor: const Color(0xFF856404),
-              foregroundColor: Colors.white,
+              backgroundColor: buttonBg,
+              foregroundColor: buttonTextColor,
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(8),
               ),

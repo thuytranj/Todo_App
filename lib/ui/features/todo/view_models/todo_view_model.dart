@@ -26,6 +26,8 @@ class TodoViewModel extends ChangeNotifier {
   String _searchQuery = '';
   bool _hasNotificationPermission = true;
   bool _isLoading = true;
+  int? _highlightedTaskId;
+  Timer? _highlightTimer;
 
   /// Lưu trữ lỗi cuối cùng nếu xảy ra trong hàng đợi bất đồng bộ
   Object? lastError;
@@ -61,6 +63,9 @@ class TodoViewModel extends ChangeNotifier {
 
   /// Từ khóa tìm kiếm hiện tại
   String get searchQuery => _searchQuery;
+
+  /// ID của công việc đang được làm nổi bật (khi người dùng chạm vào thông báo nhắc nhở)
+  int? get highlightedTaskId => _highlightedTaskId;
 
   /// Trạng thái cấp quyền thông báo của ứng dụng
   bool get hasNotificationPermission => _hasNotificationPermission;
@@ -327,6 +332,44 @@ class TodoViewModel extends ChangeNotifier {
     });
   }
 
+  /// Xử lý sự kiện người dùng chạm vào thông báo nhắc nhở trên thiết bị:
+  /// 1. Tìm công việc tương ứng theo [id].
+  /// 2. Xóa bộ lọc tìm kiếm ([_searchQuery = '']) để đảm bảo task hiển thị trên danh sách.
+  /// 3. Tự động chuyển tab ([_currentFilter]) về đúng tab chứa task (Today, Upcoming hoặc All).
+  /// 4. Đánh dấu [highlightedTaskId] và kích hoạt hiệu ứng thị giác (pulse & border).
+  /// 5. Đặt bộ đếm 3 giây tự động tắt hiệu ứng làm nổi bật một cách mượt mà.
+  void handleNotificationTap(int id) {
+    final index = _todos.indexWhere((t) => t.id == id);
+    if (index == -1) return;
+
+    final targetTask = _todos[index];
+
+    // Xóa từ khóa tìm kiếm để task không bị ẩn
+    _searchQuery = '';
+
+    // Tự động chuyển đến tab phù hợp với thời hạn của task
+    if (targetTask.dueDate != null) {
+      if (isDueTodayOrOverdue(targetTask.dueDate!, _clock())) {
+        _currentFilter = TodoFilter.today;
+      } else if (isDueUpcoming(targetTask.dueDate!, _clock())) {
+        _currentFilter = TodoFilter.upcoming;
+      } else {
+        _currentFilter = TodoFilter.all;
+      }
+    } else {
+      _currentFilter = TodoFilter.all;
+    }
+
+    _highlightedTaskId = id;
+    _highlightTimer?.cancel();
+    _highlightTimer = Timer(const Duration(seconds: 3), () {
+      _highlightedTaskId = null;
+      notifyListeners();
+    });
+
+    notifyListeners();
+  }
+
   /// Cơ chế hàng đợi tuần tự có bọc bắt lỗi (Resilient Queue):
   /// Đảm bảo nếu một thao tác ném lỗi thì các thao tác sau vẫn tiếp tục được thực thi bình thường.
   Future<void> _enqueue(Future<void> Function() job) {
@@ -339,6 +382,7 @@ class TodoViewModel extends ChangeNotifier {
   @override
   void dispose() {
     _tickerTimer?.cancel();
+    _highlightTimer?.cancel();
     _lifecycleListener?.dispose();
     super.dispose();
   }

@@ -145,5 +145,59 @@ void main() {
       expect(find.text('Plan Trip Tomorrow'), findsNothing);
       expect(find.text('No matching tasks'), findsOneWidget);
     });
+
+    testWidgets('Giao diện HomeScreen tương thích hoàn hảo trong chế độ Dark Theme', (tester) async {
+      await viewModel.initialize();
+
+      await tester.runAsync(() async {
+        await viewModel.addTodo(TodoDraft(
+          title: 'Dark Theme Task Item',
+          description: 'Dark theme note',
+          dueDate: currentTime,
+          hasTime: false,
+        ));
+      });
+
+      await tester.pumpWidget(MaterialApp(
+        theme: AppTheme.darkTheme,
+        home: HomeScreen(viewModel: viewModel),
+      ));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Dark Theme Task Item'), findsOneWidget);
+      expect(find.text('Dark theme note'), findsOneWidget);
+    });
+
+    testWidgets('Kích hoạt handleNotificationTap làm nổi bật task trên HomeScreen', (tester) async {
+      await viewModel.initialize();
+
+      await tester.runAsync(() async {
+        await viewModel.addTodo(TodoDraft(
+          title: 'Target Highlight Task',
+          dueDate: currentTime,
+          hasTime: false,
+        ));
+      });
+
+      await tester.pumpWidget(MaterialApp(
+        theme: AppTheme.lightTheme,
+        home: HomeScreen(viewModel: viewModel),
+      ));
+      await tester.pumpAndSettle();
+
+      final targetId = viewModel.allTasks.first.id;
+
+      // Kích hoạt notification tap
+      viewModel.handleNotificationTap(targetId);
+      await tester.pump(); // Cập nhật widget tree
+
+      // Kiểm tra huy hiệu Reminded xuất hiện trên item được highlight
+      expect(find.text('Reminded'), findsOneWidget);
+      expect(find.byIcon(Icons.notifications_active), findsOneWidget);
+
+      // Đẩy qua thời gian 3s để timer tắt highlight hoàn thành sạch sẽ
+      await tester.pump(const Duration(seconds: 3));
+      await tester.pump(const Duration(milliseconds: 500));
+    });
   });
 }

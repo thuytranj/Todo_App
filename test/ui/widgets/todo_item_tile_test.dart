@@ -64,5 +64,63 @@ void main() {
       // Kiểm tra có icon báo quá hạn hoặc text định dạng ngày
       expect(find.byIcon(Icons.warning_amber_rounded), findsOneWidget);
     });
+
+    testWidgets('Hiển thị huy hiệu Reminded khi isHighlighted = true', (tester) async {
+      final todo = Todo(
+        id: 3,
+        title: 'Meeting with Client',
+        dueDate: now.add(const Duration(minutes: 10)),
+        hasTime: true,
+        createdAt: now,
+      );
+
+      await tester.pumpWidget(MaterialApp(
+        home: Scaffold(
+          body: TodoItemTile(
+            todo: todo,
+            now: now,
+            isHighlighted: true,
+            onToggle: () {},
+            onTap: () {},
+            onDelete: () {},
+          ),
+        ),
+      ));
+
+      // Kiểm tra hiển thị huy hiệu Reminded và icon thông báo
+      expect(find.text('Reminded'), findsOneWidget);
+      expect(find.byIcon(Icons.notifications_active), findsOneWidget);
+    });
+
+    testWidgets('Hiển thị chuẩn xác trên nền Dark Mode không bị chữ trắng nền trắng', (tester) async {
+      final todo = Todo(
+        id: 4,
+        title: 'Dark Mode Task',
+        description: 'Detail in dark mode',
+        dueDate: now.add(const Duration(days: 1)),
+        hasTime: false,
+        createdAt: now,
+      );
+
+      await tester.pumpWidget(MaterialApp(
+        theme: ThemeData.dark(),
+        home: Scaffold(
+          body: TodoItemTile(
+            todo: todo,
+            now: now,
+            onToggle: () {},
+            onTap: () {},
+            onDelete: () {},
+          ),
+        ),
+      ));
+
+      expect(find.text('Dark Mode Task'), findsOneWidget);
+      expect(find.text('Detail in dark mode'), findsOneWidget);
+
+      // Xác minh tiêu đề sử dụng màu sáng trên nền tối
+      final titleWidget = tester.widget<Text>(find.text('Dark Mode Task'));
+      expect(titleWidget.style?.color, equals(Colors.white));
+    });
   });
 }

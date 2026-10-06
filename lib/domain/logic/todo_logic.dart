@@ -71,6 +71,18 @@ DateTime? reminderTimeFor(
   return soon.isBefore(due) ? soon : null;
 }
 
+/// Kiểm tra xem một thời điểm [due] có thuộc tab Today (hôm nay hoặc quá hạn từ trước) hay không.
+bool isDueTodayOrOverdue(DateTime due, DateTime now) {
+  final startOfTomorrow = DateTime(now.year, now.month, now.day + 1);
+  return due.isBefore(startOfTomorrow);
+}
+
+/// Kiểm tra xem một thời điểm [due] có thuộc tab Upcoming (bắt đầu từ ngày mai trở đi) hay không.
+bool isDueUpcoming(DateTime due, DateTime now) {
+  final startOfTomorrow = DateTime(now.year, now.month, now.day + 1);
+  return !due.isBefore(startOfTomorrow);
+}
+
 /// Lọc, tìm kiếm và sắp xếp danh sách công việc hiển thị trên màn hình.
 ///
 /// Quy tắc lọc:

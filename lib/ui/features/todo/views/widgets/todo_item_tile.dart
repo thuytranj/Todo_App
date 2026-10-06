@@ -5,16 +5,19 @@ import 'package:todo_app/domain/models/todo.dart';
 import 'package:todo_app/ui/core/theme/app_theme.dart';
 
 /// Widget hiển thị một mục công việc trong danh sách (phong cách Todoist):
+/// - Tương thích hoàn hảo cho cả Light Mode và Dark Mode.
 /// - Nút bấm tròn check hoàn thành.
 /// - Nhãn hạn chót với cảnh báo đỏ khi quá hạn ([isOverdue]).
 /// - Vuốt sang phải (LTR): Hoàn thành task (nền xanh lá).
 /// - Vuốt sang trái (RTL): Xóa task (nền đỏ).
+/// - Hiệu ứng làm nổi bật (Highlight Animation) khi người dùng chạm vào thông báo nhắc nhở.
 class TodoItemTile extends StatelessWidget {
   final Todo todo;
   final DateTime now;
   final VoidCallback onToggle;
   final VoidCallback onTap;
   final VoidCallback onDelete;
+  final bool isHighlighted;
 
   const TodoItemTile({
     super.key,
@@ -23,11 +26,33 @@ class TodoItemTile extends StatelessWidget {
     required this.onToggle,
     required this.onTap,
     required this.onDelete,
+    this.isHighlighted = false,
   });
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     final overdue = isOverdue(todo, now);
+
+    // Màu sắc thích ứng hoàn hảo giữa Light Mode và Dark Mode
+    final baseTileColor = isDark ? const Color(0xFF242424) : Colors.white;
+    final highlightTileColor =
+        isDark ? const Color(0xFF3E2421) : const Color(0xFFFDECEB);
+    final tileColor = isHighlighted ? highlightTileColor : baseTileColor;
+
+    final borderColor = isHighlighted
+        ? AppTheme.primaryColor
+        : (isDark ? const Color(0xFF333333) : Colors.grey.shade200);
+
+    final titleColor = todo.isCompleted
+        ? (isDark ? Colors.grey.shade600 : Colors.grey)
+        : (isDark ? Colors.white : const Color(0xFF202020));
+
+    final descColor = isDark ? Colors.grey.shade400 : Colors.grey.shade600;
+
+    final badgeColor = overdue
+        ? AppTheme.overdueColor
+        : (isDark ? Colors.blueGrey.shade200 : Colors.blueGrey.shade700);
 
     return Dismissible(
       key: ValueKey(todo.id),
@@ -81,12 +106,20 @@ class TodoItemTile extends StatelessWidget {
       },
       child: InkWell(
         onTap: onTap,
-        child: Container(
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 350),
+          curve: Curves.easeInOut,
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
           decoration: BoxDecoration(
-            color: Theme.of(context).cardTheme.color ?? Colors.white,
+            color: tileColor,
             border: Border(
-              bottom: BorderSide(color: Colors.grey.shade200, width: 0.8),
+              bottom: BorderSide(
+                color: borderColor,
+                width: isHighlighted ? 1.5 : 0.8,
+              ),
+              left: isHighlighted
+                  ? const BorderSide(color: AppTheme.primaryColor, width: 4.0)
+                  : BorderSide.none,
             ),
           ),
           child: Row(
@@ -103,7 +136,11 @@ class TodoItemTile extends StatelessWidget {
                       : Icons.radio_button_unchecked,
                   color: todo.isCompleted
                       ? AppTheme.completeColor
-                      : (overdue ? AppTheme.overdueColor : Colors.grey.shade500),
+                      : (overdue
+                          ? AppTheme.overdueColor
+                          : (isDark
+                              ? Colors.grey.shade500
+                              : Colors.grey.shade500)),
                   size: 22,
                 ),
               ),
@@ -118,9 +155,7 @@ class TodoItemTile extends StatelessWidget {
                       style: TextStyle(
                         fontSize: 16,
                         fontWeight: FontWeight.w500,
-                        color: todo.isCompleted
-                            ? Colors.grey
-                            : Theme.of(context).textTheme.bodyLarge?.color,
+                        color: titleColor,
                         decoration: todo.isCompleted
                             ? TextDecoration.lineThrough
                             : null,
@@ -135,13 +170,54 @@ class TodoItemTile extends StatelessWidget {
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(
                           fontSize: 13,
-                          color: Colors.grey.shade600,
+                          color: descColor,
                         ),
                       ),
                     ],
-                    if (todo.dueDate != null) ...[
+                    if (todo.dueDate != null || isHighlighted) ...[
                       const SizedBox(height: 6),
-                      _buildDueDateBadge(context, overdue),
+                      Wrap(
+                        crossAxisAlignment: WrapCrossAlignment.center,
+                        spacing: 8,
+                        children: [
+                          if (todo.dueDate != null)
+                            _buildDueDateBadge(context, overdue, badgeColor),
+                          if (isHighlighted)
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 6,
+                                vertical: 2,
+                              ),
+                              decoration: BoxDecoration(
+                                color: AppTheme.primaryColor.withAlpha(35),
+                                borderRadius: BorderRadius.circular(4),
+                                border: Border.all(
+                                  color: AppTheme.primaryColor,
+                                  width: 0.8,
+                                ),
+                              ),
+                              child: const Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(
+                                    Icons.notifications_active,
+                                    size: 12,
+                                    color: AppTheme.primaryColor,
+                                  ),
+                                  SizedBox(width: 4),
+                                  Text(
+                                    'Reminded',
+                                    style: TextStyle(
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.bold,
+                                      color: AppTheme.primaryColor,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                        ],
+                      ),
                     ],
                   ],
                 ),
@@ -154,10 +230,12 @@ class TodoItemTile extends StatelessWidget {
   }
 
   /// Xây dựng nhãn hiển thị ngày giờ deadline
-  Widget _buildDueDateBadge(BuildContext context, bool overdue) {
+  Widget _buildDueDateBadge(
+    BuildContext context,
+    bool overdue,
+    Color badgeColor,
+  ) {
     final due = todo.dueDate!;
-    final badgeColor =
-        overdue ? AppTheme.overdueColor : Colors.blueGrey.shade700;
 
     String dateStr;
     if (todo.hasTime) {

@@ -32,6 +32,8 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   final TextEditingController _searchController = TextEditingController();
+  final ScrollController _scrollController = ScrollController();
+  int? _lastHighlightedTaskId;
 
   @override
   void initState() {
@@ -45,7 +47,33 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   void dispose() {
     _searchController.dispose();
+    _scrollController.dispose();
     super.dispose();
+  }
+
+  /// Tự động cuộn danh sách đến vị trí task đang được làm nổi bật khi mở từ thông báo
+  void _checkAndScrollToHighlighted(List<Todo> visibleTasks) {
+    final highlightedId = widget.viewModel.highlightedTaskId;
+    if (highlightedId != null && highlightedId != _lastHighlightedTaskId) {
+      _lastHighlightedTaskId = highlightedId;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted || !_scrollController.hasClients) return;
+        final index = visibleTasks.indexWhere((t) => t.id == highlightedId);
+        if (index != -1 && _scrollController.position.maxScrollExtent > 0) {
+          final targetOffset = (index * 72.0)
+              .clamp(0.0, _scrollController.position.maxScrollExtent);
+          if (targetOffset != _scrollController.offset) {
+            _scrollController.animateTo(
+              targetOffset,
+              duration: const Duration(milliseconds: 350),
+              curve: Curves.easeInOut,
+            );
+          }
+        }
+      });
+    } else if (highlightedId == null) {
+      _lastHighlightedTaskId = null;
+    }
   }
 
   /// Mở modal BottomSheet để thêm mới hoặc chỉnh sửa công việc:
@@ -161,6 +189,8 @@ class _HomeScreenState extends State<HomeScreen> {
         }
 
         final visibleTasks = widget.viewModel.visibleTasks;
+        // Kiểm tra và tự động cuộn đến task được click từ notification
+        _checkAndScrollToHighlighted(visibleTasks);
 
         return Scaffold(
           appBar: AppBar(
@@ -252,6 +282,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   child: visibleTasks.isEmpty
                       ? _buildEmptyState()
                       : ListView.separated(
+                          controller: _scrollController,
                           itemCount: visibleTasks.length,
                           separatorBuilder: (context, index) =>
                               const SizedBox.shrink(),
@@ -261,6 +292,8 @@ class _HomeScreenState extends State<HomeScreen> {
                               key: ValueKey(task.id),
                               todo: task,
                               now: widget.viewModel.now,
+                              isHighlighted:
+                                  widget.viewModel.highlightedTaskId == task.id,
                               onToggle: () => _completeTask(context, task),
                               onTap: () => _openAddOrEditSheet(context, task),
                               onDelete: () => _deleteTask(context, task),

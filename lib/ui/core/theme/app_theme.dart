@@ -36,6 +36,10 @@ class AppTheme {
         elevation: 0,
         color: Colors.white,
       ),
+      bottomSheetTheme: const BottomSheetThemeData(
+        backgroundColor: Colors.white,
+        surfaceTintColor: Colors.transparent,
+      ),
     );
   }
 
@@ -47,8 +51,10 @@ class AppTheme {
         seedColor: primaryColor,
         primary: primaryColor,
         brightness: Brightness.dark,
+        surface: const Color(0xFF1E1E1E),
       ),
       scaffoldBackgroundColor: const Color(0xFF1E1E1E),
+      dividerColor: const Color(0xFF333333),
       appBarTheme: const AppBarTheme(
         backgroundColor: Color(0xFF252525),
         surfaceTintColor: Colors.transparent,
@@ -59,6 +65,19 @@ class AppTheme {
           fontSize: 22,
           fontWeight: FontWeight.bold,
         ),
+      ),
+      cardTheme: const CardThemeData(
+        elevation: 0,
+        color: Color(0xFF242424),
+      ),
+      bottomSheetTheme: const BottomSheetThemeData(
+        backgroundColor: Color(0xFF242424),
+        surfaceTintColor: Colors.transparent,
+      ),
+      searchBarTheme: SearchBarThemeData(
+        elevation: const WidgetStatePropertyAll(1.0),
+        backgroundColor: const WidgetStatePropertyAll(Color(0xFF2A2A2A)),
+        hintStyle: WidgetStatePropertyAll(TextStyle(color: Colors.grey.shade400)),
       ),
     );
   }

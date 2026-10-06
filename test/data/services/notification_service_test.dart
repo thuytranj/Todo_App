@@ -4,6 +4,9 @@ import 'package:todo_app/domain/models/todo.dart';
 
 /// Lớp kiểm thử giả lập để kiểm tra logic của NotificationService
 class TestableNotificationService implements NotificationService {
+  @override
+  void Function(int todoId)? onNotificationTapped;
+
   final List<String> callLogs = [];
   final Map<int, DateTime> scheduled = {};
   bool permission = true;

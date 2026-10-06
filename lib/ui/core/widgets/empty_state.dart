@@ -15,6 +15,11 @@ class EmptyState extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final iconColor = isDark ? Colors.grey.shade600 : Colors.grey.shade400;
+    final titleColor = isDark ? Colors.grey.shade300 : Colors.grey.shade700;
+    final messageColor = isDark ? Colors.grey.shade500 : Colors.grey.shade500;
+
     return Center(
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 32.0),
@@ -24,7 +29,7 @@ class EmptyState extends StatelessWidget {
             Icon(
               icon,
               size: 72,
-              color: Colors.grey.shade400,
+              color: iconColor,
             ),
             const SizedBox(height: 16),
             Text(
@@ -32,7 +37,7 @@ class EmptyState extends StatelessWidget {
               style: TextStyle(
                 fontSize: 18,
                 fontWeight: FontWeight.bold,
-                color: Colors.grey.shade700,
+                color: titleColor,
               ),
               textAlign: TextAlign.center,
             ),
@@ -41,7 +46,7 @@ class EmptyState extends StatelessWidget {
               message,
               style: TextStyle(
                 fontSize: 14,
-                color: Colors.grey.shade500,
+                color: messageColor,
               ),
               textAlign: TextAlign.center,
             ),
