@@ -104,14 +104,18 @@ void main() {
 
       expect(notification.scheduledNotifications.containsKey(1), isTrue);
 
-      // Hoàn thành task
+      // Hoàn thành task: vẫn hiện trên danh sách nhưng đánh dấu isCompleted=true
       await viewModel.completeTodo(1);
-      expect(viewModel.visibleTasks, isEmpty); // Ẩn khỏi active list
+      expect(viewModel.visibleTasks.length, 1);
+      expect(viewModel.visibleTasks.first.isCompleted, isTrue);
+      expect(viewModel.todayTasksCount, 0); // Số lượng active tasks giảm về 0
       expect(notification.cancelledNotificationIds, contains(1));
 
       // Hoàn tác hoàn thành (Undo)
       await viewModel.undoComplete(1);
       expect(viewModel.visibleTasks.length, 1);
+      expect(viewModel.visibleTasks.first.isCompleted, isFalse);
+      expect(viewModel.todayTasksCount, 1);
       expect(notification.scheduledNotifications.containsKey(1), isTrue);
       viewModel.dispose();
     });
@@ -265,6 +269,52 @@ void main() {
 
         viewModel.dispose();
       });
+    });
+
+    test('toggleTodo đảo trạng thái hoàn thành giữa complete và undoComplete', () async {
+      final task = Todo(
+        id: 1,
+        title: 'Task 1',
+        createdAt: currentTime,
+        isCompleted: false,
+      );
+      final customStorage = FakeStorageService(initialTodos: [task]);
+      final viewModel = TodoViewModel(
+        storageService: customStorage,
+        notificationService: notification,
+        clock: clock,
+      );
+
+      await viewModel.initialize();
+      expect(viewModel.allTasks.first.isCompleted, isFalse);
+
+      // Đảo lần 1: từ false -> true
+      await viewModel.toggleTodo(1);
+      expect(viewModel.allTasks.first.isCompleted, isTrue);
+
+      // Đảo lần 2: từ true -> false
+      await viewModel.toggleTodo(1);
+      expect(viewModel.allTasks.first.isCompleted, isFalse);
+
+      viewModel.dispose();
+    });
+
+    test('showSwipeTutorial hiển thị lần đầu và ẩn vĩnh viễn khi dismissSwipeTutorial', () async {
+      final customStorage = FakeStorageService(hasSeenSwipeTutorial: false);
+      final viewModel = TodoViewModel(
+        storageService: customStorage,
+        notificationService: notification,
+        clock: clock,
+      );
+
+      await viewModel.initialize();
+      expect(viewModel.showSwipeTutorial, isTrue);
+
+      await viewModel.dismissSwipeTutorial();
+      expect(viewModel.showSwipeTutorial, isFalse);
+      expect(await customStorage.getHasSeenSwipeTutorial(), isTrue);
+
+      viewModel.dispose();
     });
   });
 }

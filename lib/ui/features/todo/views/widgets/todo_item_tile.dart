@@ -35,39 +35,74 @@ class TodoItemTile extends StatelessWidget {
     final overdue = isOverdue(todo, now);
 
     // Màu sắc thích ứng hoàn hảo giữa Light Mode và Dark Mode
-    final baseTileColor = isDark ? const Color(0xFF242424) : Colors.white;
-    final highlightTileColor =
-        isDark ? const Color(0xFF3E2421) : const Color(0xFFFDECEB);
-    final tileColor = isHighlighted ? highlightTileColor : baseTileColor;
+    final Color tileColor;
+    final Border border;
 
-    final borderColor = isHighlighted
-        ? AppTheme.primaryColor
-        : (isDark ? const Color(0xFF333333) : Colors.grey.shade200);
+    if (isHighlighted) {
+      // Highlight màu đỏ Todoist khi người dùng mở từ thông báo nhắc nhở
+      tileColor = isDark ? const Color(0xFF3E2421) : const Color(0xFFFDECEB);
+      border = const Border(
+        bottom: BorderSide(color: AppTheme.primaryColor, width: 1.5),
+        left: BorderSide(color: AppTheme.primaryColor, width: 4.0),
+      );
+    } else if (todo.isCompleted) {
+      // Highlight xanh lá dịu cho task đã hoàn thành theo yêu cầu người dùng
+      tileColor = isDark ? const Color(0xFF142918) : const Color(0xFFE8F5E9);
+      border = Border(
+        bottom: BorderSide(
+          color: isDark ? const Color(0xFF1E3D24) : const Color(0xFFC8E6C9),
+          width: 1.0,
+        ),
+        left: BorderSide(
+          color: isDark ? const Color(0xFF4CAF50) : AppTheme.completeColor,
+          width: 4.0,
+        ),
+      );
+    } else {
+      tileColor = isDark ? const Color(0xFF242424) : Colors.white;
+      border = Border(
+        bottom: BorderSide(
+          color: isDark ? const Color(0xFF333333) : Colors.grey.shade200,
+          width: 0.8,
+        ),
+      );
+    }
 
-    final titleColor = todo.isCompleted
-        ? (isDark ? Colors.grey.shade600 : Colors.grey)
-        : (isDark ? Colors.white : const Color(0xFF202020));
+    final Color titleColor;
+    if (todo.isCompleted) {
+      titleColor = isDark ? const Color(0xFFA5D6A7) : const Color(0xFF2E7D32);
+    } else {
+      titleColor = isDark ? Colors.white : const Color(0xFF202020);
+    }
 
-    final descColor = isDark ? Colors.grey.shade400 : Colors.grey.shade600;
+    final descColor = todo.isCompleted
+        ? (isDark ? Colors.green.shade900.withAlpha(200) : Colors.green.shade700)
+        : (isDark ? Colors.grey.shade400 : Colors.grey.shade600);
 
-    final badgeColor = overdue
+    final badgeColor = overdue && !todo.isCompleted
         ? AppTheme.overdueColor
         : (isDark ? Colors.blueGrey.shade200 : Colors.blueGrey.shade700);
 
     return Dismissible(
       key: ValueKey(todo.id),
-      // Vuốt từ trái sang phải (LTR) -> Hoàn thành task
+      // Vuốt từ trái sang phải (LTR) -> Hoàn thành / Hoàn tác task
       background: Container(
-        color: AppTheme.completeColor,
+        color: todo.isCompleted
+            ? Colors.blueGrey.shade700
+            : AppTheme.completeColor,
         alignment: Alignment.centerLeft,
         padding: const EdgeInsets.only(left: 20),
-        child: const Row(
+        child: Row(
           children: [
-            Icon(Icons.check_circle_outline, color: Colors.white, size: 28),
-            SizedBox(width: 8),
+            Icon(
+              todo.isCompleted ? Icons.replay : Icons.check_circle_outline,
+              color: Colors.white,
+              size: 28,
+            ),
+            const SizedBox(width: 8),
             Text(
-              'Complete',
-              style: TextStyle(
+              todo.isCompleted ? 'Reopen' : 'Complete',
+              style: const TextStyle(
                 color: Colors.white,
                 fontWeight: FontWeight.bold,
               ),
@@ -98,7 +133,8 @@ class TodoItemTile extends StatelessWidget {
       confirmDismiss: (direction) async {
         if (direction == DismissDirection.startToEnd) {
           onToggle();
-          return true;
+          // Vì task đã hoàn thành vẫn hiển thị trên danh sách nên không loại bỏ widget khỏi Dismissible
+          return false;
         } else {
           onDelete();
           return true;
@@ -112,15 +148,7 @@ class TodoItemTile extends StatelessWidget {
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
           decoration: BoxDecoration(
             color: tileColor,
-            border: Border(
-              bottom: BorderSide(
-                color: borderColor,
-                width: isHighlighted ? 1.5 : 0.8,
-              ),
-              left: isHighlighted
-                  ? const BorderSide(color: AppTheme.primaryColor, width: 4.0)
-                  : BorderSide.none,
-            ),
+            border: border,
           ),
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -135,7 +163,7 @@ class TodoItemTile extends StatelessWidget {
                       ? Icons.check_circle
                       : Icons.radio_button_unchecked,
                   color: todo.isCompleted
-                      ? AppTheme.completeColor
+                      ? (isDark ? const Color(0xFF4CAF50) : AppTheme.completeColor)
                       : (overdue
                           ? AppTheme.overdueColor
                           : (isDark
@@ -174,57 +202,117 @@ class TodoItemTile extends StatelessWidget {
                         ),
                       ),
                     ],
-                    if (todo.dueDate != null || isHighlighted) ...[
+                    if (todo.dueDate != null ||
+                        isHighlighted ||
+                        todo.isCompleted) ...[
                       const SizedBox(height: 6),
                       Wrap(
                         crossAxisAlignment: WrapCrossAlignment.center,
                         spacing: 8,
+                        runSpacing: 4,
                         children: [
                           if (todo.dueDate != null)
                             _buildDueDateBadge(context, overdue, badgeColor),
+                          if (todo.isCompleted)
+                            _buildCompletedBadge(context, isDark),
                           if (isHighlighted)
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 6,
-                                vertical: 2,
-                              ),
-                              decoration: BoxDecoration(
-                                color: AppTheme.primaryColor.withAlpha(35),
-                                borderRadius: BorderRadius.circular(4),
-                                border: Border.all(
-                                  color: AppTheme.primaryColor,
-                                  width: 0.8,
-                                ),
-                              ),
-                              child: const Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Icon(
-                                    Icons.notifications_active,
-                                    size: 12,
-                                    color: AppTheme.primaryColor,
-                                  ),
-                                  SizedBox(width: 4),
-                                  Text(
-                                    'Reminded',
-                                    style: TextStyle(
-                                      fontSize: 11,
-                                      fontWeight: FontWeight.bold,
-                                      color: AppTheme.primaryColor,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
+                            _buildHighlightedBadge(context),
                         ],
                       ),
                     ],
                   ],
                 ),
               ),
+              // Nút xóa trực tiếp trên mỗi mục công việc (giúp thao tác dễ dàng mà không phụ thuộc hoàn toàn vào vuốt)
+              IconButton(
+                key: ValueKey('todo_delete_button_${todo.id}'),
+                onPressed: onDelete,
+                tooltip: 'Delete task',
+                constraints: const BoxConstraints(minWidth: 40, minHeight: 40),
+                padding: EdgeInsets.zero,
+                icon: Icon(
+                  Icons.delete_outline,
+                  size: 20,
+                  color: isDark ? Colors.grey.shade500 : Colors.grey.shade400,
+                ),
+              ),
             ],
           ),
         ),
+      ),
+    );
+  }
+
+  /// Xây dựng huy hiệu Completed màu xanh lá
+  Widget _buildCompletedBadge(BuildContext context, bool isDark) {
+    final greenColor =
+        isDark ? const Color(0xFF4CAF50) : AppTheme.completeColor;
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+      decoration: BoxDecoration(
+        color: greenColor.withAlpha(isDark ? 45 : 25),
+        borderRadius: BorderRadius.circular(4),
+        border: Border.all(
+          color: greenColor,
+          width: 0.8,
+        ),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            Icons.check_circle_outline,
+            size: 12,
+            color: greenColor,
+          ),
+          const SizedBox(width: 4),
+          Text(
+            'Completed',
+            style: TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.bold,
+              color: greenColor,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Xây dựng huy hiệu Reminded màu đỏ khi click từ notification
+  Widget _buildHighlightedBadge(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(
+        horizontal: 6,
+        vertical: 2,
+      ),
+      decoration: BoxDecoration(
+        color: AppTheme.primaryColor.withAlpha(35),
+        borderRadius: BorderRadius.circular(4),
+        border: Border.all(
+          color: AppTheme.primaryColor,
+          width: 0.8,
+        ),
+      ),
+      child: const Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            Icons.notifications_active,
+            size: 12,
+            color: AppTheme.primaryColor,
+          ),
+          SizedBox(width: 4),
+          Text(
+            'Reminded',
+            style: TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.bold,
+              color: AppTheme.primaryColor,
+            ),
+          ),
+        ],
       ),
     );
   }

@@ -6,6 +6,7 @@ import 'package:todo_app/domain/models/todo_filter.dart';
 import 'package:todo_app/ui/core/theme/app_theme.dart';
 import 'package:todo_app/ui/core/widgets/empty_state.dart';
 import 'package:todo_app/ui/core/widgets/permission_banner.dart';
+import 'package:todo_app/ui/core/widgets/swipe_tutorial_banner.dart';
 import 'package:todo_app/ui/features/todo/view_models/todo_view_model.dart';
 import 'package:todo_app/ui/features/todo/views/widgets/add_todo_sheet.dart';
 import 'package:todo_app/ui/features/todo/views/widgets/todo_item_tile.dart';
@@ -102,24 +103,40 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
-  /// Đánh dấu hoàn thành công việc và hiển thị SnackBar kèm nút hoàn tác (Undo)
-  void _completeTask(BuildContext context, Todo task) {
-    widget.viewModel.completeTodo(task.id);
-
+  /// Đảo trạng thái hoàn thành công việc và hiển thị SnackBar kèm nút hoàn tác (Undo)
+  void _toggleTask(BuildContext context, Todo task) {
     final messenger = ScaffoldMessenger.of(context);
     messenger.hideCurrentSnackBar();
-    messenger.showSnackBar(
-      SnackBar(
-        content: const Text('Task marked as completed'),
-        duration: const Duration(seconds: 4),
-        action: SnackBarAction(
-          label: 'Undo',
-          onPressed: () {
-            widget.viewModel.undoComplete(task.id);
-          },
+
+    if (task.isCompleted) {
+      widget.viewModel.undoComplete(task.id);
+      messenger.showSnackBar(
+        SnackBar(
+          content: const Text('Task marked as active'),
+          duration: const Duration(seconds: 4),
+          action: SnackBarAction(
+            label: 'Undo',
+            onPressed: () {
+              widget.viewModel.completeTodo(task.id);
+            },
+          ),
         ),
-      ),
-    );
+      );
+    } else {
+      widget.viewModel.completeTodo(task.id);
+      messenger.showSnackBar(
+        SnackBar(
+          content: const Text('Task marked as completed'),
+          duration: const Duration(seconds: 4),
+          action: SnackBarAction(
+            label: 'Undo',
+            onPressed: () {
+              widget.viewModel.undoComplete(task.id);
+            },
+          ),
+        ),
+      );
+    }
   }
 
   /// Xóa công việc và hiển thị SnackBar kèm nút hoàn tác (Undo)
@@ -277,6 +294,12 @@ class _HomeScreenState extends State<HomeScreen> {
 
                 const SizedBox(height: 6),
 
+                // Banner hướng dẫn thao tác vuốt nhanh cho người dùng mới
+                if (widget.viewModel.showSwipeTutorial)
+                  SwipeTutorialBanner(
+                    onDismiss: widget.viewModel.dismissSwipeTutorial,
+                  ),
+
                 // Danh sách công việc hoặc trạng thái rỗng
                 Expanded(
                   child: visibleTasks.isEmpty
@@ -294,7 +317,7 @@ class _HomeScreenState extends State<HomeScreen> {
                               now: widget.viewModel.now,
                               isHighlighted:
                                   widget.viewModel.highlightedTaskId == task.id,
-                              onToggle: () => _completeTask(context, task),
+                              onToggle: () => _toggleTask(context, task),
                               onTap: () => _openAddOrEditSheet(context, task),
                               onDelete: () => _deleteTask(context, task),
                             );

@@ -85,14 +85,15 @@ bool isDueUpcoming(DateTime due, DateTime now) {
 
 /// Lọc, tìm kiếm và sắp xếp danh sách công việc hiển thị trên màn hình.
 ///
-/// Quy tắc lọc:
-/// 1. Chỉ lấy các công việc chưa hoàn thành ([isCompleted] = false).
+/// Quy tắc:
+/// 1. Hiển thị cả công việc đang làm VÀ công việc đã hoàn thành (được highlight xanh trên giao diện).
 /// 2. Phân loại theo [filter]:
 ///    - [TodoFilter.today]: Các task có hạn trong ngày hôm nay HOẶC các task quá hạn từ ngày trước (Todoist standard).
 ///    - [TodoFilter.upcoming]: Các task có hạn bắt đầu từ ngày mai trở đi (từ 00:00:00 ngày hôm sau).
-///    - [TodoFilter.all]: Toàn bộ task chưa hoàn thành (bao gồm cả task không có hạn).
+///    - [TodoFilter.all]: Toàn bộ task (bao gồm cả task không có hạn).
 /// 3. Lọc theo [query]: Tìm kiếm không phân biệt hoa thường trong `title` hoặc `description`.
 /// 4. Sắp xếp ổn định (Stable Sort):
+///    - Task chưa hoàn thành luôn xếp trước task đã hoàn thành.
 ///    - Task có hạn xếp trước task không có hạn.
 ///    - `dueDate` tăng dần (sớm nhất lên đầu).
 ///    - Nếu cùng `dueDate`, sắp xếp theo `createdAt` tăng dần.
@@ -105,8 +106,8 @@ List<Todo> visibleTodos(
 ) {
   final startOfTomorrow = DateTime(now.year, now.month, now.day + 1);
 
-  // 1. Chỉ lấy task active
-  var list = todos.where((t) => !t.isCompleted);
+  // 1. Lấy danh sách tasks
+  Iterable<Todo> list = todos;
 
   // 2. Lọc theo filter tab
   switch (filter) {
@@ -142,6 +143,11 @@ List<Todo> visibleTodos(
   // 4. Sắp xếp ổn định (Stable Sort)
   final sortedList = list.toList();
   sortedList.sort((a, b) {
+    // Ưu tiên task chưa hoàn thành lên trước
+    if (a.isCompleted != b.isCompleted) {
+      return a.isCompleted ? 1 : -1;
+    }
+
     if (a.dueDate != null && b.dueDate != null) {
       final cmp = a.dueDate!.compareTo(b.dueDate!);
       if (cmp != 0) return cmp;
@@ -159,10 +165,11 @@ List<Todo> visibleTodos(
   return sortedList;
 }
 
-/// Đếm số lượng task active trong [filter], độc lập hoàn toàn với từ khóa tìm kiếm.
+/// Đếm số lượng task active (chưa hoàn thành) trong [filter], độc lập với search query.
 /// Phục vụ hiển thị số lượng badge trên Tab / SegmentedButton.
 int countForFilter(List<Todo> todos, TodoFilter filter, DateTime now) {
-  return visibleTodos(todos, filter, '', now).length;
+  final activeTodos = todos.where((t) => !t.isCompleted).toList();
+  return visibleTodos(activeTodos, filter, '', now).length;
 }
 
 /// Lọc và chọn danh sách các task đủ điều kiện đặt lịch thông báo.

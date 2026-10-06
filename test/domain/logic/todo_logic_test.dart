@@ -274,7 +274,8 @@ void main() {
 
     test('Lọc tab Today: gom đúng task hôm nay VÀ task quá hạn từ ngày trước (Todoist standard)', () {
       final list = visibleTodos(allSampleTodos, TodoFilter.today, '', now);
-      expect(list.map((t) => t.id), [1, 2, 3]); // overdueTask, todayStart, todayEnd
+      // Gồm 3 task active [1, 2, 3] và 1 task completed [6] xếp sau cùng
+      expect(list.map((t) => t.id), [1, 2, 3, 6]);
     });
 
     test('Lọc tab Upcoming: chỉ gom các task bắt đầu từ ngày mai trở đi', () {
@@ -282,16 +283,22 @@ void main() {
       expect(list.map((t) => t.id), [4]); // upcomingTask
     });
 
-    test('Lọc tab All: gom toàn bộ task active bao gồm cả task không có ngày', () {
+    test('Lọc tab All: gom toàn bộ task bao gồm cả task không có ngày và task completed xếp sau', () {
       final list = visibleTodos(allSampleTodos, TodoFilter.all, '', now);
-      expect(list.map((t) => t.id), [1, 2, 3, 4, 5]);
+      expect(list.map((t) => t.id), [1, 2, 3, 4, 5, 6]);
     });
 
-    test('Không bao giờ hiển thị task đã hoàn thành ở bất kỳ tab nào', () {
-      for (final filter in TodoFilter.values) {
-        final list = visibleTodos(allSampleTodos, filter, '', now);
-        expect(list.any((t) => t.id == 6), isFalse);
-      }
+    test('Hiển thị task đã hoàn thành trên danh sách nhưng xếp sau toàn bộ task active', () {
+      final todayList = visibleTodos(allSampleTodos, TodoFilter.today, '', now);
+      final allList = visibleTodos(allSampleTodos, TodoFilter.all, '', now);
+
+      expect(todayList.any((t) => t.id == 6), isTrue);
+      expect(todayList.last.id, 6);
+      expect(todayList.last.isCompleted, isTrue);
+
+      expect(allList.any((t) => t.id == 6), isTrue);
+      expect(allList.last.id, 6);
+      expect(allList.last.isCompleted, isTrue);
     });
 
     test('Tìm kiếm theo query không phân biệt hoa thường trên title và description', () {

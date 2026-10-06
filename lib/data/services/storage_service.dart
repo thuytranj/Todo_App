@@ -17,6 +17,12 @@ abstract class StorageService {
 
   /// Cập nhật cờ đánh dấu đã yêu cầu quyền thông báo.
   Future<void> setHasRequestedNotificationPermission(bool value);
+
+  /// Kiểm tra xem người dùng đã từng xem / tắt hướng dẫn thao tác vuốt hay chưa.
+  Future<bool> getHasSeenSwipeTutorial();
+
+  /// Cập nhật cờ đánh dấu đã xem hướng dẫn thao tác vuốt.
+  Future<void> setHasSeenSwipeTutorial(bool value);
 }
 
 /// Triển khai [StorageService] sử dụng [SharedPreferences] với cơ chế bảo toàn dữ liệu:
@@ -26,6 +32,7 @@ class SharedPrefsStorageService implements StorageService {
   static const String _todosKey = 'todo_items_v1';
   static const String _corruptKey = 'todo_items_v1_corrupt';
   static const String _permissionKey = 'has_requested_notification_permission_v1';
+  static const String _tutorialKey = 'has_seen_swipe_tutorial_v1';
 
   final Future<SharedPreferences> Function() _prefsFactory;
 
@@ -104,5 +111,17 @@ class SharedPrefsStorageService implements StorageService {
   Future<void> setHasRequestedNotificationPermission(bool value) async {
     final prefs = await _prefsFactory();
     await prefs.setBool(_permissionKey, value);
+  }
+
+  @override
+  Future<bool> getHasSeenSwipeTutorial() async {
+    final prefs = await _prefsFactory();
+    return prefs.getBool(_tutorialKey) ?? false;
+  }
+
+  @override
+  Future<void> setHasSeenSwipeTutorial(bool value) async {
+    final prefs = await _prefsFactory();
+    await prefs.setBool(_tutorialKey, value);
   }
 }

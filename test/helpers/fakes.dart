@@ -6,11 +6,13 @@ import 'package:todo_app/domain/models/todo.dart';
 class FakeStorageService implements StorageService {
   List<Todo> todos;
   bool hasRequestedPermission;
+  bool hasSeenSwipeTutorial;
   bool shouldThrowOnSave;
 
   FakeStorageService({
     List<Todo>? initialTodos,
     this.hasRequestedPermission = false,
+    this.hasSeenSwipeTutorial = false,
     this.shouldThrowOnSave = false,
   }) : todos = List.of(initialTodos ?? []);
 
@@ -35,6 +37,16 @@ class FakeStorageService implements StorageService {
   @override
   Future<void> setHasRequestedNotificationPermission(bool value) async {
     hasRequestedPermission = value;
+  }
+
+  @override
+  Future<bool> getHasSeenSwipeTutorial() async {
+    return hasSeenSwipeTutorial;
+  }
+
+  @override
+  Future<void> setHasSeenSwipeTutorial(bool value) async {
+    hasSeenSwipeTutorial = value;
   }
 }
 

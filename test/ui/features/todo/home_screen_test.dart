@@ -83,8 +83,10 @@ void main() {
       await tester.pump(); // Đưa SnackBar vào cây widget
       await tester.pump(const Duration(milliseconds: 350)); // Cho phép SnackBar hoàn thành hoạt ảnh trượt lên
 
-      // Task bị ẩn khỏi active list
-      expect(find.text('Task to Done'), findsNothing);
+      // Task vẫn hiển thị trên danh sách nhưng đã có icon check_circle và badge Completed
+      expect(find.text('Task to Done'), findsOneWidget);
+      expect(find.byIcon(Icons.check_circle), findsOneWidget);
+      expect(find.text('Completed'), findsOneWidget);
 
       // SnackBar xuất hiện kèm nút Undo
       expect(find.text('Task marked as completed'), findsOneWidget);
@@ -94,8 +96,10 @@ void main() {
       await tester.tap(find.text('Undo'));
       await tester.pumpAndSettle();
 
-      // Task được khôi phục lại
+      // Task được khôi phục về trạng thái chưa hoàn thành
       expect(find.text('Task to Done'), findsOneWidget);
+      expect(find.byIcon(Icons.radio_button_unchecked), findsOneWidget);
+      expect(find.text('Completed'), findsNothing);
     });
 
     testWidgets('Chuyển tab và tìm kiếm lọc danh sách thời gian thực', (tester) async {
@@ -198,6 +202,58 @@ void main() {
       // Đẩy qua thời gian 3s để timer tắt highlight hoàn thành sạch sẽ
       await tester.pump(const Duration(seconds: 3));
       await tester.pump(const Duration(milliseconds: 500));
+    });
+
+    testWidgets('Hiển thị SwipeTutorialBanner khi chưa xem và đóng khi bấm Got it', (tester) async {
+      storage.hasSeenSwipeTutorial = false;
+      await viewModel.initialize();
+
+      await tester.pumpWidget(MaterialApp(
+        theme: AppTheme.lightTheme,
+        home: HomeScreen(viewModel: viewModel),
+      ));
+      await tester.pumpAndSettle();
+
+      // Banner hướng dẫn xuất hiện
+      expect(find.text('Quick Tips & Gestures'), findsOneWidget);
+      expect(find.text('Got it'), findsOneWidget);
+
+      // Chạm vào nút Got it
+      await tester.tap(find.text('Got it'));
+      await tester.pumpAndSettle();
+
+      // Banner biến mất
+      expect(find.text('Quick Tips & Gestures'), findsNothing);
+    });
+
+    testWidgets('Nhấn nút icon thùng rác trên task thực hiện xóa và hiển thị SnackBar Undo', (tester) async {
+      await viewModel.initialize();
+
+      await tester.runAsync(() async {
+        await viewModel.addTodo(TodoDraft(
+          title: 'Direct Delete Task',
+          dueDate: currentTime,
+          hasTime: false,
+        ));
+      });
+
+      await tester.pumpWidget(MaterialApp(
+        theme: AppTheme.lightTheme,
+        home: HomeScreen(viewModel: viewModel),
+      ));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Direct Delete Task'), findsOneWidget);
+      expect(find.byIcon(Icons.delete_outline), findsOneWidget);
+
+      // Nhấn nút delete icon
+      await tester.tap(find.byIcon(Icons.delete_outline));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 350));
+
+      // Task bị xóa khỏi danh sách
+      expect(find.text('Direct Delete Task'), findsNothing);
+      expect(find.text('Task deleted'), findsOneWidget);
     });
   });
 }

@@ -26,6 +26,7 @@ class TodoViewModel extends ChangeNotifier {
   String _searchQuery = '';
   bool _hasNotificationPermission = true;
   bool _isLoading = true;
+  bool _hasSeenSwipeTutorial = false;
   int? _highlightedTaskId;
   Timer? _highlightTimer;
 
@@ -72,6 +73,9 @@ class TodoViewModel extends ChangeNotifier {
 
   /// Trạng thái đang tải dữ liệu lúc khởi động
   bool get isLoading => _isLoading;
+
+  /// Hiển thị banner hướng dẫn cử chỉ vuốt nếu người dùng chưa từng tắt hoặc trải nghiệm
+  bool get showSwipeTutorial => !_hasSeenSwipeTutorial;
 
   /// Số lượng task active của từng tab (cố định, không bị ảnh hưởng bởi search query)
   int get allTasksCount => countForFilter(_todos, TodoFilter.all, _clock());
@@ -125,6 +129,10 @@ class TodoViewModel extends ChangeNotifier {
     // 5. Đặt lại lịch thông báo cho các task active (chống spam lúc mở app)
     final activeTodos = _todos.where((t) => !t.isCompleted).toList();
     await _notificationService.rescheduleAll(activeTodos, _clock());
+
+    // 6. Đọc cờ trạng thái hướng dẫn thao tác vuốt
+    _hasSeenSwipeTutorial =
+        await _storageService.getHasSeenSwipeTutorial();
 
     _isLoading = false;
     notifyListeners();
@@ -288,6 +296,27 @@ class TodoViewModel extends ChangeNotifier {
         );
       }
     });
+  }
+
+  /// Đảo trạng thái hoàn thành của công việc:
+  /// - Nếu đang hoàn thành: hoàn tác (Undo Complete).
+  /// - Nếu chưa hoàn thành: đánh dấu hoàn thành (Complete).
+  Future<void> toggleTodo(int id) async {
+    final index = _todos.indexWhere((t) => t.id == id);
+    if (index == -1) return;
+    if (_todos[index].isCompleted) {
+      await undoComplete(id);
+    } else {
+      await completeTodo(id);
+    }
+  }
+
+  /// Đánh dấu người dùng đã xem và đóng hướng dẫn thao tác vuốt
+  Future<void> dismissSwipeTutorial() async {
+    if (_hasSeenSwipeTutorial) return;
+    _hasSeenSwipeTutorial = true;
+    notifyListeners();
+    await _storageService.setHasSeenSwipeTutorial(true);
   }
 
   /// Xóa hẳn một công việc khỏi danh sách:

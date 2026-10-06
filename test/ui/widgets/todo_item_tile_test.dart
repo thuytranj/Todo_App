@@ -33,10 +33,11 @@ void main() {
 
       expect(find.text('Buy Milk'), findsOneWidget);
       expect(find.text('2 cartons'), findsOneWidget);
-      expect(find.byType(IconButton), findsOneWidget);
+      expect(find.byIcon(Icons.radio_button_unchecked), findsOneWidget);
+      expect(find.byIcon(Icons.delete_outline), findsOneWidget);
 
       // Chạm vào checkbox tròn
-      await tester.tap(find.byType(IconButton));
+      await tester.tap(find.byIcon(Icons.radio_button_unchecked));
       expect(toggled, isTrue);
     });
 
@@ -121,6 +122,63 @@ void main() {
       // Xác minh tiêu đề sử dụng màu sáng trên nền tối
       final titleWidget = tester.widget<Text>(find.text('Dark Mode Task'));
       expect(titleWidget.style?.color, equals(Colors.white));
+    });
+
+    testWidgets('Hiển thị highlight xanh lá và huy hiệu Completed khi task đã hoàn thành', (tester) async {
+      final completedTodo = Todo(
+        id: 5,
+        title: 'Finished Homework',
+        dueDate: now.add(const Duration(days: 1)),
+        isCompleted: true,
+        createdAt: now,
+      );
+
+      await tester.pumpWidget(MaterialApp(
+        home: Scaffold(
+          body: TodoItemTile(
+            todo: completedTodo,
+            now: now,
+            onToggle: () {},
+            onTap: () {},
+            onDelete: () {},
+          ),
+        ),
+      ));
+
+      // Kiểm tra có icon check_circle
+      expect(find.byIcon(Icons.check_circle), findsOneWidget);
+      // Kiểm tra có badge Completed
+      expect(find.text('Completed'), findsOneWidget);
+
+      // Kiểm tra text có gạch ngang lineThrough
+      final titleWidget = tester.widget<Text>(find.text('Finished Homework'));
+      expect(titleWidget.style?.decoration, equals(TextDecoration.lineThrough));
+    });
+
+    testWidgets('Nhấn nút delete icon gọi trực tiếp onDelete', (tester) async {
+      final todo = Todo(
+        id: 6,
+        title: 'Task to be Deleted',
+        createdAt: now,
+      );
+
+      var deleted = false;
+
+      await tester.pumpWidget(MaterialApp(
+        home: Scaffold(
+          body: TodoItemTile(
+            todo: todo,
+            now: now,
+            onToggle: () {},
+            onTap: () {},
+            onDelete: () => deleted = true,
+          ),
+        ),
+      ));
+
+      expect(find.byIcon(Icons.delete_outline), findsOneWidget);
+      await tester.tap(find.byIcon(Icons.delete_outline));
+      expect(deleted, isTrue);
     });
   });
 }
