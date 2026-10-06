@@ -32,6 +32,7 @@ class TodoViewModel extends ChangeNotifier {
   /// Hàng đợi tuần tự xử lý các thao tác bất đồng bộ (Storage + Notification)
   Future<void> _writeQueue = Future.value();
 
+  final bool _enableTicker;
   Timer? _tickerTimer;
   AppLifecycleListener? _lifecycleListener;
 
@@ -39,9 +40,11 @@ class TodoViewModel extends ChangeNotifier {
     required StorageService storageService,
     required NotificationService notificationService,
     DateTime Function()? clock,
+    bool enableTicker = true,
   })  : _storageService = storageService,
         _notificationService = notificationService,
-        _clock = clock ?? DateTime.now;
+        _clock = clock ?? DateTime.now,
+        _enableTicker = enableTicker;
 
   // --- GETTERS ---
 
@@ -70,6 +73,12 @@ class TodoViewModel extends ChangeNotifier {
   int get upcomingTasksCount =>
       countForFilter(_todos, TodoFilter.upcoming, _clock());
 
+  /// Hàm cung cấp mốc thời gian hiện tại (phục vụ deterministic testing)
+  DateTime Function() get clock => _clock;
+
+  /// Mốc thời gian hiện tại từ nguồn thời gian đồng hồ
+  DateTime get now => _clock();
+
   // --- INITIALIZATION ---
 
   /// Khởi tạo ViewModel khi app mở lên:
@@ -81,6 +90,7 @@ class TodoViewModel extends ChangeNotifier {
   /// 6. Bật bộ đếm 60s và listener vòng đời để cập nhật ngày giờ thời gian thực.
   Future<void> initialize() async {
     _isLoading = true;
+    _writeQueue = Future.value();
     notifyListeners();
 
     // 1. Đọc dữ liệu từ Storage
@@ -113,11 +123,13 @@ class TodoViewModel extends ChangeNotifier {
     _isLoading = false;
     notifyListeners();
 
-    // 6. Bật Timer 60s để tự động cập nhật nhãn ngày tương đối và badge quá hạn
-    _tickerTimer?.cancel();
-    _tickerTimer = Timer.periodic(const Duration(seconds: 60), (_) {
-      notifyListeners();
-    });
+    // 6. Bật Timer 60s để tự động cập nhật nhãn ngày tương đối và badge quá hạn (nếu được bật)
+    if (_enableTicker) {
+      _tickerTimer?.cancel();
+      _tickerTimer = Timer.periodic(const Duration(seconds: 60), (_) {
+        notifyListeners();
+      });
+    }
 
     // 7. Lắng nghe sự kiện app quay lại foreground từ background
     _lifecycleListener?.dispose();

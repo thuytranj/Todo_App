@@ -1,0 +1,150 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:todo_app/domain/models/todo_draft.dart';
+import 'package:todo_app/domain/models/todo_filter.dart';
+import 'package:todo_app/ui/core/theme/app_theme.dart';
+import 'package:todo_app/ui/features/todo/view_models/todo_view_model.dart';
+import 'package:todo_app/ui/features/todo/views/home_screen.dart';
+
+import '../../../helpers/fakes.dart';
+
+void main() {
+  group('HomeScreen Integration & Widget Tests', () {
+    late FakeStorageService storage;
+    late FakeNotificationService notification;
+    late DateTime currentTime;
+    late TodoViewModel viewModel;
+
+    setUpAll(() {
+      TestWidgetsFlutterBinding.ensureInitialized();
+    });
+
+    setUp(() {
+      currentTime = DateTime(2026, 10, 6, 10, 0);
+      storage = FakeStorageService();
+      notification = FakeNotificationService();
+      viewModel = TodoViewModel(
+        storageService: storage,
+        notificationService: notification,
+        clock: () => currentTime,
+        enableTicker: false,
+      );
+    });
+
+    tearDown(() {
+      viewModel.dispose();
+    });
+
+    testWidgets('Hiển thị SearchBar, Tab Filter và EmptyState khi chưa có task', (tester) async {
+      await viewModel.initialize();
+
+      await tester.pumpWidget(MaterialApp(
+        theme: AppTheme.lightTheme,
+        home: HomeScreen(viewModel: viewModel),
+      ));
+      await tester.pumpAndSettle();
+
+      // Kiểm tra thanh tìm kiếm
+      expect(find.byType(SearchBar), findsOneWidget);
+
+      // Kiểm tra các tabs
+      expect(find.textContaining('Today'), findsOneWidget);
+      expect(find.textContaining('Upcoming'), findsOneWidget);
+      expect(find.textContaining('All'), findsOneWidget);
+
+      // Kiểm tra EmptyState khi danh sách rỗng
+      expect(find.text('No tasks for today'), findsOneWidget);
+
+      // Kiểm tra nút FloatingActionButton (+)
+      expect(find.byType(FloatingActionButton), findsOneWidget);
+    });
+
+    testWidgets('Thao tác hoàn thành task hiển thị SnackBar Undo và hoàn tác thành công', (tester) async {
+      await viewModel.initialize();
+
+      // Thêm task cho ngày hôm nay qua runAsync để xử lý hàng đợi bất đồng bộ
+      await tester.runAsync(() async {
+        await viewModel.addTodo(TodoDraft(
+          title: 'Task to Done',
+          dueDate: currentTime,
+          hasTime: false,
+        ));
+      });
+
+      await tester.pumpWidget(MaterialApp(
+        theme: AppTheme.lightTheme,
+        home: HomeScreen(viewModel: viewModel),
+      ));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Task to Done'), findsOneWidget);
+
+      // Chạm vào checkbox tròn để hoàn thành
+      await tester.tap(find.byIcon(Icons.radio_button_unchecked));
+      await tester.pump(); // Đưa SnackBar vào cây widget
+      await tester.pump(const Duration(milliseconds: 350)); // Cho phép SnackBar hoàn thành hoạt ảnh trượt lên
+
+      // Task bị ẩn khỏi active list
+      expect(find.text('Task to Done'), findsNothing);
+
+      // SnackBar xuất hiện kèm nút Undo
+      expect(find.text('Task marked as completed'), findsOneWidget);
+      expect(find.text('Undo'), findsOneWidget);
+
+      // Chạm vào nút Undo
+      await tester.tap(find.text('Undo'));
+      await tester.pumpAndSettle();
+
+      // Task được khôi phục lại
+      expect(find.text('Task to Done'), findsOneWidget);
+    });
+
+    testWidgets('Chuyển tab và tìm kiếm lọc danh sách thời gian thực', (tester) async {
+      await viewModel.initialize();
+
+      // Thêm 1 task hôm nay và 1 task sắp tới qua runAsync
+      await tester.runAsync(() async {
+        await viewModel.addTodo(TodoDraft(
+          title: 'Buy Milk Today',
+          dueDate: currentTime,
+          hasTime: false,
+        ));
+        await viewModel.addTodo(TodoDraft(
+          title: 'Plan Trip Tomorrow',
+          dueDate: currentTime.add(const Duration(days: 1)),
+          hasTime: false,
+        ));
+      });
+
+      await tester.pumpWidget(MaterialApp(
+        theme: AppTheme.lightTheme,
+        home: HomeScreen(viewModel: viewModel),
+      ));
+      await tester.pumpAndSettle();
+
+      // Mặc định ở tab Today -> chỉ thấy 'Buy Milk Today'
+      expect(find.text('Buy Milk Today'), findsOneWidget);
+      expect(find.text('Plan Trip Tomorrow'), findsNothing);
+
+      // Chạm chuyển sang tab Upcoming
+      await tester.tap(find.textContaining('Upcoming'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Buy Milk Today'), findsNothing);
+      expect(find.text('Plan Trip Tomorrow'), findsOneWidget);
+
+      // Nhập từ khóa tìm kiếm (dùng pump để tránh kẹt cursor blink animation)
+      await tester.enterText(find.byType(SearchBar), 'Trip');
+      await tester.pump();
+
+      expect(find.text('Plan Trip Tomorrow'), findsOneWidget);
+
+      // Tìm kiếm không khớp
+      await tester.enterText(find.byType(SearchBar), 'XYZ Nonexistent');
+      await tester.pump();
+
+      expect(find.text('Plan Trip Tomorrow'), findsNothing);
+      expect(find.text('No matching tasks'), findsOneWidget);
+    });
+  });
+}
