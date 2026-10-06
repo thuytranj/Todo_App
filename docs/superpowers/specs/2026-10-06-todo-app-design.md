@@ -1,4 +1,4 @@
-# Todoist-Inspired Flutter TODO App - Design Specification (v2.0)
+# Todoist-Inspired Flutter TODO App - Design Specification (v2.1)
 
 **Architectural & Technical Design Specification**  
 **Date:** 2026-10-06  
@@ -28,47 +28,66 @@ The project follows `flutter-apply-architecture-best-practices` with 100% testab
 lib/
 ├── domain/
 │   ├── models/
-│   │   ├── todo.dart               # Entity with defensive JSON parsing, copyWith, clear flags
+│   │   ├── todo.dart               # Entity with strict JSON validation, copyWith, clear flags
+│   │   ├── todo_draft.dart         # Draft entity returned by AddTodoSheet (title, description, dueDate, hasTime)
 │   │   └── todo_filter.dart        # Enum: all, today, upcoming
 │   └── logic/
-│       └── todo_logic.dart         # Pure functions: isOverdue, reminderTimeFor, visibleTodos, nextId
+│       └── todo_logic.dart         # Pure functions: isOverdue, reminderTimeFor, visibleTodos, nextId, selectRemindersToSchedule, reminderBody
 ├── data/
 │   └── services/
 │       ├── storage_service.dart    # Abstract interface & SharedPrefsStorageService (record-by-record parsing, corrupt backup)
-│       └── notification_service.dart # Abstract interface & FlutterLocalNotificationService (timezone, exact alarm fallback)
+│       └── notification_service.dart # Abstract interface & FlutterLocalNotificationService (timezone, exact alarm fallback, cancelAll before reschedule)
 ├── ui/
 │   ├── core/
 │   │   ├── theme/
 │   │   │   └── app_theme.dart      # Todoist Red (#E44332), Material 3, Dark mode
 │   │   └── widgets/
 │   │       ├── empty_state.dart    # Clean empty state widget
-│   │       └── permission_banner.dart # Warning banner with "Open Settings" action via permission_handler
+│   │       └── permission_banner.dart # Warning banner with onOpenSettings callback
 │   └── features/
 │       └── todo/
 │           ├── view_models/
-│           │   └── todo_view_model.dart # ChangeNotifier: write queue, clock injection, 60s ticker & lifecycle refresh
+│           │   └── todo_view_model.dart # ChangeNotifier: resilient write queue, clock injection, 60s ticker & lifecycle refresh, 30-day purge
 │           └── views/
-│               ├── home_screen.dart     # SearchBar, Tab/SegmentedBar with fixed counts, Dismissible list
+│               ├── home_screen.dart     # SearchBar, SegmentedButton with fixed counts, Dismissible list, hideCurrentSnackBar
 │               └── widgets/
-│                   ├── todo_item_tile.dart   # Circular checkbox, overdue badge, Dismissible (LTR complete, RTL delete)
-│                   └── add_todo_sheet.dart   # Shared create/edit sheet, isScrollControlled, viewInsets padding
+│                   ├── todo_item_tile.dart   # Circular checkbox, overdue badge, Dismissible (LTR complete, RTL delete), accepts now
+│                   └── add_todo_sheet.dart   # Shared create/edit sheet returning TodoDraft, isScrollControlled, viewInsets padding
 └── main.dart                       # Local timezone initialization, DI, app entry point
 ```
 
 ### Core Design Rules
 * **Zero Extra State Package**: Pure `ChangeNotifier` + `ListenableBuilder` from Flutter SDK.
 * **Abstract Interfaces for Testability**: Both `StorageService` and `NotificationService` have abstract interfaces to enable mocking in unit/integration tests without hardware or plugin bindings.
-* **Storage-First & Write Queue**: In-memory state and storage are updated first; notifications are scheduled secondary in a `try-catch`. A sequential write queue ensures rapid user actions never result in race-condition overwrites.
+* **Storage-First & Resilient Combined Queue**: In-memory state and storage are updated first; notifications are scheduled secondary. A sequential queue (`_enqueue`) with `.catchError` guarantees operations never interleave or permanently halt on failure.
 
 ---
 
 ## 3. Domain Layer
 
-### 3.1. Entity `Todo` (`lib/domain/models/todo.dart`)
+### 3.1. Entity `TodoDraft` (`lib/domain/models/todo_draft.dart`)
+
+```dart
+class TodoDraft {
+  final String title;
+  final String? description;
+  final DateTime? dueDate;
+  final bool hasTime;
+
+  const TodoDraft({
+    required this.title,
+    this.description,
+    this.dueDate,
+    this.hasTime = false,
+  }) : assert(hasTime ? dueDate != null : true, 'hasTime requires non-null dueDate');
+}
+```
+
+### 3.2. Entity `Todo` (`lib/domain/models/todo.dart`)
 
 ```dart
 class Todo {
-  final int id;                 // 32-bit integer ID, shared with notification ID
+  final int id;                 // 32-bit positive integer ID, shared with notification ID
   final String title;           // Non-empty title
   final String? description;    // Optional notes
   final DateTime? dueDate;      // Null = No deadline; normalized to 00:00:00 if hasTime == false
@@ -117,14 +136,22 @@ class Todo {
     'createdAt': createdAt.toIso8601String(),
   };
 
-  /// Defensive JSON deserialization:
-  /// - Avoids unsafe casts (as int)
-  /// - Uses stable deterministic fallback for createdAt
+  /// Strict & Defensive JSON deserialization:
+  /// - Throws FormatException if `id` is invalid (<= 0, non-int) or `title` is empty
+  /// - Other fields use safe fallbacks
   /// - Enforces hasTime invariant: hasTime is true ONLY if dueDate != null
   factory Todo.fromJson(Map<String, dynamic> json) {
     final rawId = json['id'];
-    final id = rawId is int ? rawId : int.tryParse(rawId?.toString() ?? '') ?? 0;
-    final title = json['title']?.toString() ?? '';
+    final id = rawId is int ? rawId : int.tryParse(rawId?.toString() ?? '');
+    if (id == null || id <= 0) {
+      throw const FormatException('Invalid or missing todo id');
+    }
+
+    final title = json['title']?.toString()?.trim() ?? '';
+    if (title.isEmpty) {
+      throw const FormatException('Invalid or empty todo title');
+    }
+
     final description = json['description']?.toString();
     final dueDate = json['dueDate'] != null ? DateTime.tryParse(json['dueDate'].toString()) : null;
     final rawHasTime = json['hasTime'] == true;
@@ -146,39 +173,26 @@ class Todo {
 }
 ```
 
-### 3.2. Pure Business Logic (`lib/domain/logic/todo_logic.dart`)
+### 3.3. Pure Business Logic (`lib/domain/logic/todo_logic.dart`)
 
-#### A. ID Generation (`nextId`)
 ```dart
 int nextId(List<Todo> todos) {
   if (todos.isEmpty) return 1;
   return todos.map((t) => t.id).reduce((max, id) => id > max ? id : max) + 1;
 }
-```
 
-#### B. Overdue Check (`isOverdue`)
-* Invariant: For date-only tasks (`hasTime == false`), `dueDate` is normalized to `00:00:00` on that day.
-* A date-only task becomes overdue **only when that calendar day has passed** (`dueDate < startOfToday`).
-* A timed task (`hasTime == true`) becomes overdue **the moment `now` passes `dueDate`** (`dueDate < now`).
-
-```dart
 bool isOverdue(Todo todo, DateTime now) {
   final due = todo.dueDate;
   if (due == null || todo.isCompleted) return false;
   if (todo.hasTime) {
     return due.isBefore(now);
   } else {
-    final startOfToday = DateTime(now.year, now.month, now.day);
-    return due.isBefore(startOfToday);
+    final dueDay = DateTime(due.year, due.month, due.day);
+    final today = DateTime(now.year, now.month, now.day);
+    return dueDay.isBefore(today);
   }
 }
-```
 
-#### C. Notification Schedule Time (`reminderTimeFor`)
-* **Parametric Lead Time**: Defaults to 10 minutes (`Duration leadTime = const Duration(minutes: 10)`), allowing manual testing with 1 minute without changing business logic constants.
-* **Anti-Spam on Startup**: `allowLate: false` during `rescheduleAll` skips tasks within the 10-minute window. `allowLate: true` on user create/edit schedules alert for `now + 5s` only if `now + 5s < due`.
-
-```dart
 DateTime? reminderTimeFor(
   Todo todo,
   DateTime now, {
@@ -187,29 +201,17 @@ DateTime? reminderTimeFor(
 }) {
   final due = todo.dueDate;
   if (due == null || !todo.hasTime || todo.isCompleted) return null;
-  if (!due.isAfter(now)) return null; // due <= now is ignored
+  if (!due.isAfter(now)) return null;
 
   final reminder = due.subtract(leadTime);
   if (reminder.isAfter(now)) return reminder;
 
-  if (!allowLate) return null; // App launch / rescheduleAll: do not spam late alert
+  if (!allowLate) return null;
 
   final soon = now.add(const Duration(seconds: 5));
-  return soon.isBefore(due) ? soon : null; // Never alert after due date
+  return soon.isBefore(due) ? soon : null;
 }
-```
 
-#### D. Tab & Search Filtering with Stable Sort (`visibleTodos`)
-* **Today Tab**: Contains tasks due today ($00:00:00 \le \text{due} \le 23:59:59$) **plus** Overdue tasks from previous days (`dueDate < startOfToday`), following Todoist standards.
-* **Upcoming Tab**: Tasks due strictly tomorrow onwards ($\text{due} \ge \text{startOfTomorrow}$).
-* **All Tab**: All active tasks, including tasks without a due date.
-* **Deterministic Stable Sort**:
-  1. Tasks with due dates appear before tasks without due dates.
-  2. `dueDate` ascending.
-  3. `createdAt` ascending.
-  4. `id` ascending.
-
-```dart
 List<Todo> visibleTodos(
   List<Todo> todos,
   TodoFilter filter,
@@ -269,6 +271,32 @@ List<Todo> visibleTodos(
 int countForFilter(List<Todo> todos, TodoFilter filter, DateTime now) {
   return visibleTodos(todos, filter, '', now).length;
 }
+
+List<Todo> selectRemindersToSchedule(
+  List<Todo> todos,
+  DateTime now, {
+  int limit = 64,
+  Duration leadTime = const Duration(minutes: 10),
+}) {
+  final eligible = todos.where((t) {
+    return reminderTimeFor(t, now, allowLate: false, leadTime: leadTime) != null;
+  }).toList();
+
+  eligible.sort((a, b) {
+    final remA = reminderTimeFor(a, now, allowLate: false, leadTime: leadTime)!;
+    final remB = reminderTimeFor(b, now, allowLate: false, leadTime: leadTime)!;
+    return remA.compareTo(remB);
+  });
+
+  return eligible.take(limit).toList();
+}
+
+String reminderBody(Todo todo) {
+  if (todo.description != null && todo.description!.trim().isNotEmpty) {
+    return todo.description!.trim();
+  }
+  return 'Your task is due in 10 minutes.';
+}
 ```
 
 ---
@@ -281,14 +309,16 @@ int countForFilter(List<Todo> todos, TodoFilter filter, DateTime now) {
 abstract class StorageService {
   Future<List<Todo>> loadTodos();
   Future<void> saveTodos(List<Todo> todos);
+  Future<bool> getHasRequestedNotificationPermission();
+  Future<void> setHasRequestedNotificationPermission(bool value);
 }
 ```
 
 #### Defensive Persistence Implementation (`SharedPrefsStorageService`):
 1. **Key Versioning**: Uses key `'todo_items_v1'`.
-2. **Corrupted String Backup**: If `jsonDecode` fails completely on raw string, copies raw string to `'todo_items_v1_corrupt'` and returns `[]`.
-3. **Record-by-Record Deserialization**: Loops through each element in the parsed JSON list. If a single element throws a deserialization error, it logs the error, drops that corrupt record, and retains all valid records.
-4. **No Empty Overwrite**: If loading encounters corrupted records, the remaining valid records are kept so user additions don't blindly wipe prior data.
+2. **Corrupted String Backup**:
+   - If decoded JSON is not a `List` (e.g. `{}` or primitive) OR if `jsonDecode` fails, copies raw string to `'todo_items_v1_corrupt'` and returns `[]`.
+   - If any individual record throws an exception during deserialization, it logs the error, drops the corrupted record, and **backs up the original raw string to `'todo_items_v1_corrupt'`** before returning the remaining valid records. This prevents data loss on subsequent saves.
 
 ### 4.2. `NotificationService` (`lib/data/services/notification_service.dart`)
 
@@ -305,18 +335,19 @@ abstract class NotificationService {
     required DateTime scheduledDate,
   });
   Future<void> cancelNotification(int id);
+  Future<void> cancelAllNotifications();
   Future<void> rescheduleAll(List<Todo> todos, DateTime now);
 }
 ```
 
 #### Timezone & Native Details (`FlutterLocalNotificationService`):
-1. **Device Local Timezone**: Uses `flutter_timezone` plugin to resolve device location name (`await FlutterTimezone.getLocalTimezone()`), initializes `tz.initializeTimeZones()`, and binds via `tz.setLocalLocation(tz.getLocation(timeZoneName))`.
+1. **Device Local Timezone**: Uses `flutter_timezone` plugin to resolve device location name (`await FlutterTimezone.getLocalTimezone()`), initializes `tz.initializeTimeZones()`, and binds via `tz.setLocalLocation(tz.getLocation(timeZoneName))`. **Safe Fallback**: If `getLocation` throws on an unusual timezone name, safely falls back to `tz.getLocation('UTC')`.
 2. **Scheduling Conversion**: Converts local `DateTime` into `tz.TZDateTime.from(scheduledDate, tz.local)`.
 3. **Cancel Before Schedule**: Every `scheduleNotification(id, ...)` calls `cancelNotification(id)` first to prevent duplicate notifications upon task edits.
 4. **Safe Try-Catch**: Scheduling operations are wrapped in `try-catch`; failures log errors and do not crash the app or block storage saves.
 5. **iOS 64-Limit & Reschedule All**:
-   * On app launch, `TodoViewModel.initialize()` calls `rescheduleAll(activeTodos, clock())`.
-   * To obey iOS's hard limit of 64 pending local notifications, `rescheduleAll` sorts eligible tasks by reminder time and schedules only the nearest 64 tasks.
+   * `rescheduleAll` calls `cancelAllNotifications()` first to purge orphaned alerts.
+   * Then schedules eligible tasks from `selectRemindersToSchedule(todos, now, limit: 64)`.
 
 ---
 
@@ -328,8 +359,8 @@ dependencies:
   flutter:
     sdk: flutter
   shared_preferences: ^2.5.4
-  flutter_local_notifications: ^19.0.0
-  timezone: ^0.10.0
+  flutter_local_notifications: ^22.3.1
+  timezone: ^0.11.0
   flutter_timezone: ^4.1.0
   permission_handler: ^12.0.1
   intl: ^0.20.2
@@ -340,19 +371,22 @@ dev_dependencies:
   flutter_lints: ^5.0.0
 ```
 
-### 5.2. Android Native Configuration
-* **Java 17 & Desugaring**: In `android/app/build.gradle`:
-  ```groovy
-  compileOptions {
-      coreLibraryDesugaringEnabled true
-      sourceCompatibility JavaVersion.VERSION_17
-      targetCompatibility JavaVersion.VERSION_17
-  }
-  defaultConfig {
-      minSdkVersion 24 // Required for modern local notifications & desugaring
+### 5.2. Android Native Configuration (Kotlin DSL)
+* In `android/app/build.gradle.kts`:
+  ```kotlin
+  android {
+      compileSdk = 36
+      defaultConfig {
+          minSdk = 24
+      }
+      compileOptions {
+          isCoreLibraryDesugaringEnabled = true
+          sourceCompatibility = JavaVersion.VERSION_17
+          targetCompatibility = JavaVersion.VERSION_17
+      }
   }
   dependencies {
-      coreLibraryDesugaring 'com.android.tools:desugar_jdk_libs:2.1.4'
+      coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")
   }
   ```
 * **Permissions & Receivers**: In `android/app/src/main/AndroidManifest.xml`:
@@ -361,7 +395,6 @@ dev_dependencies:
   <uses-permission android:name="android.permission.VIBRATE"/>
   <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
   <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM"/>
-  <uses-permission android:name="android.permission.USE_EXACT_ALARM"/>
 
   <application ...>
       <receiver android:exported="false" android:name="com.dexterous.flutterlocalnotifications.ScheduledNotificationReceiver" />
@@ -384,9 +417,6 @@ dev_dependencies:
       _ application: UIApplication,
       didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?
     ) -> Bool {
-      FlutterLocalNotificationsPlugin.setPluginRegistrantCallback { (registry) in
-        GeneratedPluginRegistrant.register(with: registry)
-      }
       if #available(iOS 10.0, *) {
         UNUserNotificationCenter.current().delegate = self as UNUserNotificationCenterDelegate
       }
@@ -407,144 +437,80 @@ dev_dependencies:
   * `String _searchQuery = ''`
   * `bool _hasNotificationPermission = true`
   * `bool _isLoading = true`
-* **Clock & Timers**:
-  * Injectable clock `final DateTime Function() _clock` (defaults to `DateTime.now`).
-  * 60-second `Timer.periodic`: calls `notifyListeners()` so relative date labels and overdue badges refresh in real-time without user interaction.
-  * `AppLifecycleListener.onResume`: re-checks permission status and calls `notifyListeners()` when app returns to foreground.
-* **Sequential Write Queue**:
-  * Private chain `Future<void> _writeQueue = Future.value();`
-  * Every mutation enqueues `_storageService.saveTodos(_todos)` to serialize writes safely.
+* **Resilient Combined Queue**:
+  ```dart
+  Future<void> _enqueue(Future<void> Function() job) {
+    _writeQueue = _writeQueue.then((_) => job()).catchError((Object e) {
+      lastError = e;
+    });
+    return _writeQueue;
+  }
+  ```
+  Both storage saves and notification operations run sequentially in the same queued job.
+* **Initialization Flow**:
+  1. Load todos from storage.
+  2. Purge completed tasks older than 30 days (`createdAt` or completed threshold > 30 days).
+  3. Check permission status.
+  4. If `!await storageService.getHasRequestedNotificationPermission()`, call `notificationService.requestGeneralPermissions()` and set flag to true.
+  5. Call `notificationService.rescheduleAll(activeTodos, clock())`.
+* **Exact Alarm On-Demand**:
+  * On saving a task with `hasTime == true` for the first time, invoke `notificationService.requestExactAlarmPermission()`.
 * **Undo Operations**:
-  * `undoComplete(int id)`: Sets `isCompleted = false`. Re-schedules notification with `allowLate: false` (avoids immediate 5-second spam since user already knows of the task).
-  * `undoDelete(Todo deletedTodo)`: Checks if `deletedTodo.id` is occupied by another newly created task in `_todos`. If occupied, assigns `nextId(_todos)` to resolve collisions, then adds back and re-schedules notification.
+  * `undoComplete(int id)`: Sets `isCompleted = false`. Re-schedules notification with `allowLate: false`.
+  * `undoDelete(Todo deletedTodo)`: If `deletedTodo.id` is occupied by another newly created task, assigns `nextId(_todos)` to resolve collisions, then adds back and re-schedules notification.
+* **Cleanup & Timers**:
+  * Exposes `setFilter(TodoFilter)`, `setQuery(String)`.
+  * 60-second periodic timer + `AppLifecycleListener.onResume`.
+  * `dispose()` cancels timer and lifecycle listener.
 
 ### 6.2. `HomeScreen` (`lib/ui/features/todo/views/home_screen.dart`)
 * **Top Search Bar**: "Search tasks..." field with clear icon button.
-* **Permission Banner**: Rendered conditionally if `_hasNotificationPermission == false`. Displays:
-  *"Notifications are disabled. You will not receive reminders."* with an action button *"Settings"* calling `openAppSettings()`.
+* **Permission Banner**: Rendered conditionally if `_hasNotificationPermission == false`.
+  * Displays: *"Notifications are disabled. You will not receive reminders."*
+  * Action button *"Settings"* calls `openAppSettings()`.
 * **Filter Bar**: `SegmentedButton<TodoFilter>` with 3 tabs:
   * **Today (N)**
   * **Upcoming (N)**
   * **All (N)**
-  * *Note: Tab counts (N) reflect total active tasks in that tab, NOT filtered by search query.*
+  * Tab counts (N) reflect total active tasks in that tab, NOT filtered by search query.
 * **Task List & Dismissible**:
   * Items wrapped in `Dismissible` with `key: ValueKey(todo.id)`.
   * **Left-to-Right (Start-to-End)**: Complete task. Green background with checkmark icon.
   * **Right-to-Left (End-to-Start)**: Delete task. Red background with trash icon.
-  * Triggers SnackBar with an **Undo** button.
+  * Calls `ScaffoldMessenger.of(context).hideCurrentSnackBar()` before showing a new SnackBar with **Undo**.
 * **Empty State**: Friendly illustration and text when no tasks match filter or query.
 
 ### 6.3. `AddTodoSheet` (`lib/ui/features/todo/views/widgets/add_todo_sheet.dart`)
+* Returns `Future<TodoDraft?>`.
 * Dual-purpose: Handles both **Create** and **Edit** via optional `Todo? initialTodo`.
 * Form behavior:
   * `isScrollControlled: true` and `EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom)`.
-  * Title field (autofocus). Description field.
+  * Title input, Description input.
   * Date Picker (`showDatePicker`). When date is selected, `dueDate` is normalized to `00:00:00`.
   * Time Switch/Picker (`showTimePicker`). Enabled only when a date is selected.
   * Clear Date button to reset task to dateless.
-  * Validation: Prevents selecting past date/times when saving a timed task.
+  * **Validation Rule**: Prevents saving past date/time **ONLY IF** date/time was modified compared to `initialTodo`.
 
 ---
 
 ## 7. Testing Strategy
 
 1. **Unit Test Pure Logic (`test/domain/logic/todo_logic_test.dart`)**:
-   * `reminderTimeFor`:
-     * No date / no time / completed $\rightarrow$ returns `null`.
-     * Overdue / due == now $\rightarrow$ returns `null`.
-     * Due in 30 mins $\rightarrow$ returns `due - 10m`.
-     * Due in 6 mins, `allowLate: true` $\rightarrow$ returns `now + 5s`.
-     * Due in 6 mins, `allowLate: false` $\rightarrow$ returns `null`.
-     * Due in 3 seconds, `allowLate: true` $\rightarrow$ returns `null` (never alerts after due).
-     * Custom `leadTime: 1m` works accurately.
-   * `isOverdue`:
-     * Timed task: overdue if `due < now`.
-     * Date-only task: overdue only if `due < startOfToday` (NOT overdue in the morning of the same day).
-   * `visibleTodos`:
-     * Today tab captures today's tasks and prior overdue tasks.
-     * Upcoming tab strictly starts tomorrow.
-     * All tab captures dateless tasks.
-     * Search filters within current tab.
-     * Stable sort order verified.
-   * `nextId`:
-     * Empty $\rightarrow$ 1; Sparse list `[1, 5, 3]` $\rightarrow$ 6.
+   * `reminderTimeFor` edge cases: boundary at `due == now`, `now + 5s >= due`, custom `leadTime`.
+   * `isOverdue`: date-only calendar comparison (`dueDay.isBefore(today)`).
+   * `selectRemindersToSchedule`: verifies sorting and 64 limit.
+   * `visibleTodos`: Today, Upcoming, All boundaries (00:00:00 tomorrow, 23:59:59).
+   * `nextId`: empty and sparse lists.
 2. **Unit Test Models & Persistence (`test/domain/models/todo_test.dart`, `test/data/services/storage_service_test.dart`)**:
-   * `fromJson` defensive parsing against bad types and missing keys.
-   * Corrupt JSON string backed up to `todo_items_v1_corrupt`.
-   * Corrupt single record skipped while preserving remaining records.
+   * `Todo.fromJson` throws `FormatException` on invalid ID or empty title.
+   * Corrupt JSON object `{}` backed up to `todo_items_v1_corrupt` and returns `[]`.
+   * Corrupt single record skipped while preserving remaining records and backing up raw string.
 3. **Unit Test ViewModel (`test/ui/features/todo/todo_view_model_test.dart`)**:
-   * Mock `StorageService` and `NotificationService`.
-   * Complete & Undo flow with notification cancellation and re-scheduling.
-   * Delete & Undo with ID collision handling.
-   * Storage-first resilience: storage succeeds even if notification fails.
-   * 60s ticker & lifecycle resume triggers `notifyListeners()`.
-
----
-
-## 8. Micro-Task Breakdown & Implementation Checklist
-
-Each task strictly follows `atomic-conventional-commits`, `micro-task-workflow`, and TDD:
-
-- [ ] **Task 1: Project Scaffolding & Dependencies**
-  - Run `flutter create --org com.example todo_app`.
-  - Add dependencies: `shared_preferences`, `flutter_local_notifications`, `timezone`, `flutter_timezone`, `permission_handler`, `intl`.
-  - Setup `.gitignore` (ignore build artifacts, `.env`, local IDE files).
-  - Verification: `flutter pub get` passes.
-
-- [ ] **Task 2: Native Android & iOS Platform Setup**
-  - Android: `build.gradle` Java 17, `coreLibraryDesugaringEnabled`, `minSdkVersion 24`.
-  - Android: `AndroidManifest.xml` permissions & receivers.
-  - iOS: `AppDelegate.swift` plugin registrant & delegate.
-  - Verification: Clean build succeeds on Android (`flutter build apk --debug`) and iOS (`flutter build ios --no-codesign`).
-
-- [ ] **Task 3: Domain Model & Entity Tests**
-  - Create `TodoFilter` enum.
-  - Create `Todo` model with defensive `fromJson`, `toJson`, `copyWith`, `clearDueDate`, `clearDescription`.
-  - Create unit tests in `test/domain/models/todo_test.dart`.
-  - Verification: `flutter test test/domain/models/todo_test.dart` passes.
-
-- [ ] **Task 4: Domain Business Logic & Comprehensive Pure Tests**
-  - Implement `nextId`, `isOverdue`, `reminderTimeFor`, `visibleTodos`, `countForFilter` in `todo_logic.dart`.
-  - Implement comprehensive unit tests in `test/domain/logic/todo_logic_test.dart`.
-  - Verification: `flutter test test/domain/logic/todo_logic_test.dart` passes (100% logic coverage).
-
-- [ ] **Task 5: Storage Service & Corrupt Recovery**
-  - Create abstract `StorageService` and `SharedPrefsStorageService`.
-  - Implement record-by-record parsing, `todo_items_v1_corrupt` backup.
-  - Create unit tests in `test/data/services/storage_service_test.dart`.
-  - Verification: `flutter test test/data/services/storage_service_test.dart` passes.
-
-- [ ] **Task 6: Notification Service & Timezone Engine**
-  - Create abstract `NotificationService` and `FlutterLocalNotificationService`.
-  - Setup `flutter_timezone`, `tz.initializeTimeZones()`, `zonedSchedule`, `cancelNotification`, and 64-task cap in `rescheduleAll`.
-  - Implement unit test with mock service in `test/data/services/notification_service_test.dart`.
-  - Verification: Unit tests pass.
-
-- [ ] **Task 7: TodoViewModel & State Management**
-  - Create `TodoViewModel` with write queue, clock injection, 60s ticker, `AppLifecycleListener.onResume`.
-  - Implement `addTodo`, `editTodo`, `completeTodo`, `undoComplete`, `deleteTodo`, `undoDelete` (with ID collision resolution).
-  - Create unit tests in `test/ui/features/todo/todo_view_model_test.dart`.
-  - Verification: All ViewModel tests pass.
-
-- [ ] **Task 8: Atomic UI Components**
-  - Create `AppTheme` (Todoist Red `#E44332`, Material 3, Dark mode).
-  - Create `EmptyState` and `PermissionBanner` (with `openAppSettings()`).
-  - Create `TodoItemTile` with circular checkbox, overdue badge, Dismissible (LTR complete, RTL delete).
-  - Create widget test in `test/ui/widgets/todo_item_tile_test.dart`.
-  - Verification: Widget test passes.
-
-- [ ] **Task 9: Add / Edit Todo Bottom Sheet**
-  - Create `AddTodoSheet` supporting both new task creation and editing.
-  - Implement `isScrollControlled: true`, `viewInsets` padding, date/time pickers, past-time validation.
-  - Create widget test in `test/ui/widgets/add_todo_sheet_test.dart`.
-  - Verification: Widget test passes.
-
-- [ ] **Task 10: Home Screen & Flow Integration**
-  - Build `HomeScreen` with `SearchBar`, `SegmentedButton` tabs (fixed counts), `ListenableBuilder`, FAB.
-  - Wire SnackBar with Undo action on Complete and Delete.
-  - Verification: App runs cleanly and integrates all layers.
-
-- [ ] **Task 11: End-to-End QA & Known Platform Limits Documentation**
-  - Create `README.md` documenting architecture, test instructions, and platform notes (iOS 64 pending limit, Android Doze mode inexact timing).
-  - Manual QA on physical/simulated device: schedule task due in 2 minutes, background/terminate app, verify 10-minute/alert notification fires.
-  - Final verification: `flutter analyze` and `flutter test` pass with 0 errors/warnings.
+   * Resilient queue: error in one job does not block subsequent jobs.
+   * Initial launch requests permission only once.
+   * Exact alarm requested on first timed task.
+   * Undo delete with ID collision reallocates ID.
+   * Purges completed tasks older than 30 days on launch.
+   * Fake timers using `fakeAsync`.
+4. **Coverage Target**:
+   * `flutter test --coverage` verifies 100% logic coverage in `lib/domain/logic/`.
