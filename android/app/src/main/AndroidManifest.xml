@@ -1,4 +1,13 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Quyền nhận thông báo khi khởi động lại thiết bị để lên lịch lại thông báo -->
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED"/>
+    <!-- Quyền rung khi thông báo đổ chuông -->
+    <uses-permission android:name="android.permission.VIBRATE"/>
+    <!-- Quyền gửi thông báo trên Android 13 (API 33) trở lên -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
+    <!-- Quyền hẹn giờ chính xác (Exact Alarm) - không dùng USE_EXACT_ALARM để tránh bị Play Store hạn chế -->
+    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM"/>
+
     <application
         android:label="todo_app"
         android:name="${applicationName}"
@@ -25,6 +34,17 @@
                 <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
         </activity>
+
+        <!-- Broadcast receiver phục vụ việc bắn thông báo theo lịch đã đặt -->
+        <receiver android:exported="false" android:name="com.dexterous.flutterlocalnotifications.ScheduledNotificationReceiver" />
+        <!-- Broadcast receiver phục vụ việc khôi phục lịch thông báo sau khi khởi động lại máy -->
+        <receiver android:exported="false" android:name="com.dexterous.flutterlocalnotifications.ScheduledNotificationBootReceiver">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED"/>
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED"/>
+            </intent-filter>
+        </receiver>
+
         <!-- Don't delete the meta-data below.
              This is used by the Flutter tool to generate GeneratedPluginRegistrant.java -->
         <meta-data
