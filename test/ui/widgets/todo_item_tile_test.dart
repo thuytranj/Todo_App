@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:todo_app/domain/models/todo.dart';
+import 'package:todo_app/ui/core/theme/app_theme.dart';
 import 'package:todo_app/ui/features/todo/views/widgets/todo_item_tile.dart';
 
 void main() {
@@ -62,8 +63,15 @@ void main() {
         ),
       ));
 
-      // Kiểm tra có icon báo quá hạn hoặc text định dạng ngày
+      // Kiểm tra có icon báo quá hạn cảnh báo
       expect(find.byIcon(Icons.warning_amber_rounded), findsOneWidget);
+      // Kiểm tra có huy hiệu Overdue và icon error_outline
+      expect(find.text('Overdue'), findsOneWidget);
+      expect(find.byIcon(Icons.error_outline), findsOneWidget);
+
+      // Kiểm tra màu chữ của tiêu đề là màu đỏ cảnh báo
+      final titleWidget = tester.widget<Text>(find.text('Overdue Project'));
+      expect(titleWidget.style?.color, equals(AppTheme.overdueColor));
     });
 
     testWidgets('Hiển thị huy hiệu Reminded khi isHighlighted = true', (tester) async {

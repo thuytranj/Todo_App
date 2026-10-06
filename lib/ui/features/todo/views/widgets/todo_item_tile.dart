@@ -58,6 +58,19 @@ class TodoItemTile extends StatelessWidget {
           width: 4.0,
         ),
       );
+    } else if (overdue) {
+      // Highlight tone màu đỏ cảnh báo cho task quá hạn (tương tự như complete)
+      tileColor = isDark ? const Color(0xFF2E1515) : const Color(0xFFFFF0EF);
+      border = Border(
+        bottom: BorderSide(
+          color: isDark ? const Color(0xFF4A1E1E) : const Color(0xFFFFCDD2),
+          width: 1.0,
+        ),
+        left: BorderSide(
+          color: isDark ? const Color(0xFFEF5350) : AppTheme.overdueColor,
+          width: 4.0,
+        ),
+      );
     } else {
       tileColor = isDark ? const Color(0xFF242424) : Colors.white;
       border = Border(
@@ -71,13 +84,17 @@ class TodoItemTile extends StatelessWidget {
     final Color titleColor;
     if (todo.isCompleted) {
       titleColor = isDark ? const Color(0xFFA5D6A7) : const Color(0xFF2E7D32);
+    } else if (overdue) {
+      titleColor = isDark ? const Color(0xFFFF8A80) : AppTheme.overdueColor;
     } else {
       titleColor = isDark ? Colors.white : const Color(0xFF202020);
     }
 
     final descColor = todo.isCompleted
         ? (isDark ? Colors.green.shade900.withAlpha(200) : Colors.green.shade700)
-        : (isDark ? Colors.grey.shade400 : Colors.grey.shade600);
+        : (overdue
+            ? (isDark ? const Color(0xFFE57373) : const Color(0xFFC62828))
+            : (isDark ? Colors.grey.shade400 : Colors.grey.shade600));
 
     final badgeColor = overdue && !todo.isCompleted
         ? AppTheme.overdueColor
@@ -213,6 +230,8 @@ class TodoItemTile extends StatelessWidget {
                         children: [
                           if (todo.dueDate != null)
                             _buildDueDateBadge(context, overdue, badgeColor),
+                          if (overdue && !todo.isCompleted)
+                            _buildOverdueBadge(context, isDark),
                           if (todo.isCompleted)
                             _buildCompletedBadge(context, isDark),
                           if (isHighlighted)
@@ -273,6 +292,42 @@ class TodoItemTile extends StatelessWidget {
               fontSize: 11,
               fontWeight: FontWeight.bold,
               color: greenColor,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Xây dựng huy hiệu Overdue màu đỏ cảnh báo cho task quá hạn
+  Widget _buildOverdueBadge(BuildContext context, bool isDark) {
+    final redColor = isDark ? const Color(0xFFEF5350) : AppTheme.overdueColor;
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+      decoration: BoxDecoration(
+        color: redColor.withAlpha(isDark ? 45 : 25),
+        borderRadius: BorderRadius.circular(4),
+        border: Border.all(
+          color: redColor,
+          width: 0.8,
+        ),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            Icons.error_outline,
+            size: 12,
+            color: redColor,
+          ),
+          const SizedBox(width: 4),
+          Text(
+            'Overdue',
+            style: TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.bold,
+              color: redColor,
             ),
           ),
         ],
