@@ -274,8 +274,8 @@ void main() {
       expect(upcomingFinder, findsOneWidget);
       expect(allFinder, findsOneWidget);
 
-      // Lấy AnimatedContainer của các nút để kiểm tra bo góc 10dp
-      final containers = tester.widgetList<AnimatedContainer>(find.byType(AnimatedContainer));
+      // Lấy Container của các nút để kiểm tra bo góc 10dp
+      final containers = tester.widgetList<Container>(find.byType(Container));
       final tabContainers = containers.where((c) {
         final dec = c.decoration;
         if (dec is BoxDecoration) {
@@ -289,6 +289,11 @@ void main() {
       final todayTopLeft = tester.getTopRight(todayFinder);
       final upcomingTopLeft = tester.getTopLeft(upcomingFinder);
       expect(upcomingTopLeft.dx - todayTopLeft.dx, greaterThan(0));
+
+      // Kiểm tra thanh SearchBar có bo góc 10dp đồng bộ
+      final searchBar = tester.widget<SearchBar>(find.byType(SearchBar));
+      final searchShape = searchBar.shape?.resolve({}) as RoundedRectangleBorder;
+      expect(searchShape.borderRadius, equals(BorderRadius.circular(10.0)));
     });
 
     testWidgets('SnackBar Undo có màu sắc tương thích và bo góc 10dp trong cả Light và Dark mode', (tester) async {

@@ -43,6 +43,17 @@ class AppTheme {
         backgroundColor: Colors.white,
         surfaceTintColor: Colors.transparent,
       ),
+      searchBarTheme: SearchBarThemeData(
+        elevation: const WidgetStatePropertyAll(0.0),
+        backgroundColor: const WidgetStatePropertyAll(Colors.white),
+        hintStyle: WidgetStatePropertyAll(TextStyle(color: Colors.grey.shade500)),
+        shape: WidgetStatePropertyAll(
+          RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(10.0),
+            side: const BorderSide(color: Color(0xFFE5E7EB), width: 1.0),
+          ),
+        ),
+      ),
       snackBarTheme: SnackBarThemeData(
         behavior: SnackBarBehavior.floating,
         backgroundColor: const Color(0xFF202020),
@@ -91,9 +102,15 @@ class AppTheme {
         surfaceTintColor: Colors.transparent,
       ),
       searchBarTheme: SearchBarThemeData(
-        elevation: const WidgetStatePropertyAll(1.0),
-        backgroundColor: const WidgetStatePropertyAll(Color(0xFF2A2A2A)),
+        elevation: const WidgetStatePropertyAll(0.0),
+        backgroundColor: const WidgetStatePropertyAll(Color(0xFF242424)),
         hintStyle: WidgetStatePropertyAll(TextStyle(color: Colors.grey.shade400)),
+        shape: WidgetStatePropertyAll(
+          RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(10.0),
+            side: const BorderSide(color: Color(0xFF383838), width: 1.0),
+          ),
+        ),
       ),
       snackBarTheme: SnackBarThemeData(
         behavior: SnackBarBehavior.floating,

@@ -264,7 +264,21 @@ class _HomeScreenState extends State<HomeScreen> {
                           },
                         ),
                     ],
-                    elevation: const WidgetStatePropertyAll(1.0),
+                    elevation: const WidgetStatePropertyAll(0.0),
+                    backgroundColor: WidgetStatePropertyAll(
+                      isDark ? const Color(0xFF242424) : Colors.white,
+                    ),
+                    shape: WidgetStatePropertyAll(
+                      RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10.0),
+                        side: BorderSide(
+                          color: isDark
+                              ? const Color(0xFF383838)
+                              : const Color(0xFFE5E7EB),
+                          width: 1.0,
+                        ),
+                      ),
+                    ),
                   ),
                 ),
 
@@ -380,9 +394,7 @@ class _HomeScreenState extends State<HomeScreen> {
       textColor = isDark ? const Color(0xFFB0B0B0) : const Color(0xFF555555);
     }
 
-    return AnimatedContainer(
-      duration: const Duration(milliseconds: 200),
-      curve: Curves.easeInOut,
+    return Container(
       height: 38,
       decoration: BoxDecoration(
         color: backgroundColor,
