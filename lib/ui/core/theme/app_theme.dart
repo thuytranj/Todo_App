@@ -11,6 +11,9 @@ class AppTheme {
   // Màu xanh lá dùng cho hành động hoàn thành (Complete) khi vuốt ngang
   static const Color completeColor = Color(0xFF2E7D32);
 
+  // Màu vàng/hổ phách dùng cho hiệu ứng nhắc nhở công việc (Reminder Highlight)
+  static const Color reminderColor = Color(0xFFF59E0B);
+
   /// Cấu hình giao diện Light Theme
   static ThemeData get lightTheme {
     return ThemeData(

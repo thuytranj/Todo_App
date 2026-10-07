@@ -61,7 +61,7 @@ class _HomeScreenState extends State<HomeScreen> {
         if (!mounted || !_scrollController.hasClients) return;
         final index = visibleTasks.indexWhere((t) => t.id == highlightedId);
         if (index != -1 && _scrollController.position.maxScrollExtent > 0) {
-          final targetOffset = (index * 72.0)
+          final targetOffset = (index * 82.0)
               .clamp(0.0, _scrollController.position.maxScrollExtent);
           if (targetOffset != _scrollController.offset) {
             _scrollController.animateTo(
@@ -306,9 +306,15 @@ class _HomeScreenState extends State<HomeScreen> {
                       ? _buildEmptyState()
                       : ListView.separated(
                           controller: _scrollController,
+                          padding: const EdgeInsets.fromLTRB(
+                            16.0,
+                            8.0,
+                            16.0,
+                            88.0,
+                          ),
                           itemCount: visibleTasks.length,
                           separatorBuilder: (context, index) =>
-                              const SizedBox.shrink(),
+                              const SizedBox(height: 10.0),
                           itemBuilder: (context, index) {
                             final task = visibleTasks[index];
                             return TodoItemTile(

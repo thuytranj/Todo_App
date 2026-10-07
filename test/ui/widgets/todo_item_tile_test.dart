@@ -255,5 +255,47 @@ void main() {
       await tester.tap(find.byIcon(Icons.delete_outline));
       expect(deleted, isTrue);
     });
+
+    testWidgets('Task box có bo góc nhẹ (10dp) và huy hiệu Reminded có tone màu vàng', (tester) async {
+      final todo = Todo(
+        id: 8,
+        title: 'Rounded & Yellow Glow Task',
+        dueDate: now.add(const Duration(hours: 1)),
+        hasTime: true,
+        createdAt: now,
+      );
+
+      await tester.pumpWidget(MaterialApp(
+        home: Scaffold(
+          body: TodoItemTile(
+            todo: todo,
+            now: now,
+            isHighlighted: true,
+            onToggle: () {},
+            onTap: () {},
+            onDelete: () {},
+          ),
+        ),
+      ));
+
+      // Kiểm tra task box có bo góc nhẹ (10dp)
+      final containerFinder = find.descendant(
+        of: find.byType(Transform),
+        matching: find.byType(Container),
+      );
+      final boxContainer = tester.widget<Container>(containerFinder.first);
+      final boxDec = boxContainer.decoration as BoxDecoration;
+      expect(boxDec.borderRadius, equals(BorderRadius.circular(10.0)));
+
+      // Kiểm tra huy hiệu Reminded sử dụng tone vàng hổ phách
+      final remindedText = tester.widget<Text>(find.text('Reminded'));
+      expect(remindedText.style?.color, equals(const Color(0xFFB45309)));
+
+      final remindedIcon = tester.widget<Icon>(find.byIcon(Icons.notifications_active));
+      expect(remindedIcon.color, equals(const Color(0xFFB45309)));
+
+      // Xả thời gian để ticker animation kết thúc
+      await tester.pump(const Duration(seconds: 3));
+    });
   });
 }

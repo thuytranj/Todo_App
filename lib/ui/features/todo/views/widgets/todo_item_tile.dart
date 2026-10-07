@@ -7,11 +7,12 @@ import 'package:todo_app/ui/core/theme/app_theme.dart';
 
 /// Widget hiển thị một mục công việc trong danh sách (phong cách Todoist):
 /// - Tương thích hoàn hảo cho cả Light Mode và Dark Mode.
+/// - Thiết kế dạng Card bo góc nhẹ (10dp) với viền thanh lịch.
 /// - Nút bấm tròn check hoàn thành.
 /// - Nhãn hạn chót với cảnh báo đỏ khi quá hạn ([isOverdue]).
 /// - Vuốt sang phải (LTR): Hoàn thành task (nền xanh lá).
 /// - Vuốt sang trái (RTL): Xóa task (nền đỏ).
-/// - Hiệu ứng làm nổi bật khi nhắc nhở: Fade/Glow + Scale nhẹ chạy 3 giây rồi dừng hoàn toàn.
+/// - Hiệu ứng nhắc nhở: Fade/Glow tone vàng ấm + Scale nhẹ chạy 3 giây rồi dừng hoàn toàn.
 class TodoItemTile extends StatefulWidget {
   final Todo todo;
   final DateTime now;
@@ -41,7 +42,7 @@ class _TodoItemTileState extends State<TodoItemTile>
   @override
   void initState() {
     super.initState();
-    // Bộ điều khiển hiệu ứng làm nổi bật (chạy chính xác 3 giây rồi dừng hoàn toàn)
+    // Bộ điều khiển hiệu ứng làm nổi bật nhắc nhở (chạy chính xác 3 giây rồi dừng hoàn toàn)
     _highlightController = AnimationController(
       vsync: this,
       duration: const Duration(seconds: 3),
@@ -91,41 +92,31 @@ class _TodoItemTileState extends State<TodoItemTile>
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final overdue = isOverdue(widget.todo, widget.now);
+    final borderRadius = BorderRadius.circular(10.0);
 
-    // 1. Xác định màu sắc cơ sở (Base Colors) dựa trên trạng thái của task
+    // 1. Xác định màu sắc cơ sở (Base Colors & Borders) dựa trên trạng thái của task
     final Color baseTileColor;
-    final BorderSide baseLeftBorder;
-    final BorderSide baseBottomBorder;
+    final Color baseBorderColor;
+    final double baseBorderWidth;
 
     if (widget.todo.isCompleted) {
       // Highlight xanh lá dịu cho task đã hoàn thành
       baseTileColor = isDark ? const Color(0xFF142918) : const Color(0xFFE8F5E9);
-      baseLeftBorder = BorderSide(
-        color: isDark ? const Color(0xFF4CAF50) : AppTheme.completeColor,
-        width: 4.0,
-      );
-      baseBottomBorder = BorderSide(
-        color: isDark ? const Color(0xFF1E3D24) : const Color(0xFFC8E6C9),
-        width: 1.0,
-      );
+      baseBorderColor =
+          isDark ? const Color(0xFF2E7D32).withAlpha(160) : const Color(0xFFA5D6A7);
+      baseBorderWidth = 1.2;
     } else if (overdue) {
       // Highlight tone màu đỏ cảnh báo cho task quá hạn
       baseTileColor = isDark ? const Color(0xFF2E1515) : const Color(0xFFFFF0EF);
-      baseLeftBorder = BorderSide(
-        color: isDark ? const Color(0xFFEF5350) : AppTheme.overdueColor,
-        width: 4.0,
-      );
-      baseBottomBorder = BorderSide(
-        color: isDark ? const Color(0xFF4A1E1E) : const Color(0xFFFFCDD2),
-        width: 1.0,
-      );
+      baseBorderColor =
+          isDark ? const Color(0xFFEF5350).withAlpha(160) : const Color(0xFFEF9A9A);
+      baseBorderWidth = 1.2;
     } else {
+      // Task đang hoạt động bình thường
       baseTileColor = isDark ? const Color(0xFF242424) : Colors.white;
-      baseLeftBorder = BorderSide.none;
-      baseBottomBorder = BorderSide(
-        color: isDark ? const Color(0xFF333333) : Colors.grey.shade200,
-        width: 0.8,
-      );
+      baseBorderColor =
+          isDark ? const Color(0xFF383838) : const Color(0xFFE5E7EB);
+      baseBorderWidth = 1.0;
     }
 
     // Màu chữ tiêu đề tương thích Light/Dark
@@ -151,11 +142,14 @@ class _TodoItemTileState extends State<TodoItemTile>
 
     return Dismissible(
       key: ValueKey(widget.todo.id),
-      // Vuốt từ trái sang phải (LTR) -> Hoàn thành / Hoàn tác task
+      // Vuốt từ trái sang phải (LTR) -> Hoàn thành / Hoàn tác task (bo góc 10dp đồng bộ)
       background: Container(
-        color: widget.todo.isCompleted
-            ? Colors.blueGrey.shade700
-            : AppTheme.completeColor,
+        decoration: BoxDecoration(
+          color: widget.todo.isCompleted
+              ? Colors.blueGrey.shade700
+              : AppTheme.completeColor,
+          borderRadius: borderRadius,
+        ),
         alignment: Alignment.centerLeft,
         padding: const EdgeInsets.only(left: 20),
         child: Row(
@@ -176,9 +170,12 @@ class _TodoItemTileState extends State<TodoItemTile>
           ],
         ),
       ),
-      // Vuốt từ phải sang trái (RTL) -> Xóa task
+      // Vuốt từ phải sang trái (RTL) -> Xóa task (bo góc 10dp đồng bộ)
       secondaryBackground: Container(
-        color: Colors.red.shade700,
+        decoration: BoxDecoration(
+          color: Colors.red.shade700,
+          borderRadius: borderRadius,
+        ),
         alignment: Alignment.centerRight,
         padding: const EdgeInsets.only(right: 20),
         child: const Row(
@@ -220,19 +217,19 @@ class _TodoItemTileState extends State<TodoItemTile>
           // 1. Scale nhẹ: dao động tinh tế từ 1.0 đến 1.025 (2.5%)
           final scale = 1.0 + (0.025 * pulseFactor);
 
-          // 2. Glow (Hào quang phát sáng đỏ dịu xung quanh tile)
+          // 2. Glow (Hào quang phát sáng tone vàng ấm xung quanh box)
           final List<BoxShadow> glowShadows;
           if (widget.isHighlighted && pulseFactor > 0.01) {
             final glowColor =
-                isDark ? const Color(0xFFFF5252) : AppTheme.primaryColor;
+                isDark ? const Color(0xFFFFD54F) : const Color(0xFFFFB300);
             glowShadows = [
               BoxShadow(
-                color: glowColor.withAlpha((pulseFactor * (isDark ? 80 : 50)).round()),
+                color: glowColor.withAlpha((pulseFactor * (isDark ? 85 : 55)).round()),
                 blurRadius: 10.0 * pulseFactor,
                 spreadRadius: 1.5 * pulseFactor,
               ),
               BoxShadow(
-                color: glowColor.withAlpha((pulseFactor * (isDark ? 130 : 85)).round()),
+                color: glowColor.withAlpha((pulseFactor * (isDark ? 140 : 90)).round()),
                 blurRadius: 18.0 * pulseFactor,
                 spreadRadius: 3.5 * pulseFactor,
               ),
@@ -241,13 +238,15 @@ class _TodoItemTileState extends State<TodoItemTile>
             glowShadows = const [];
           }
 
-          // 3. Fade màu nền & đường viền chuyển động nhịp nhàng
+          // 3. Fade màu nền & đường viền tone vàng hổ phách chuyển động nhịp nhàng
           final Color currentTileColor;
-          final Border border;
+          final Color currentBorderColor;
+          final double currentBorderWidth;
 
           if (widget.isHighlighted) {
+            // Tông vàng ấm áp/hổ phách khi được nhắc nhở
             final highlightPeakColor =
-                isDark ? const Color(0xFF3E2421) : const Color(0xFFFDECEB);
+                isDark ? const Color(0xFF332914) : const Color(0xFFFFF9E6);
             currentTileColor = Color.lerp(
               baseTileColor,
               highlightPeakColor,
@@ -255,137 +254,140 @@ class _TodoItemTileState extends State<TodoItemTile>
             )!;
 
             final highlightBorderColor =
-                isDark ? const Color(0xFFFF5252) : AppTheme.primaryColor;
-            border = Border(
-              bottom: BorderSide(
-                color: Color.lerp(
-                  baseBottomBorder.color,
-                  highlightBorderColor,
-                  0.5 + (0.5 * pulseFactor),
-                )!,
-                width: 1.0 + (0.5 * pulseFactor),
-              ),
-              left: BorderSide(
-                color: highlightBorderColor,
-                width: 4.0,
-              ),
-            );
+                isDark ? const Color(0xFFFFD54F) : const Color(0xFFFFA000);
+            currentBorderColor = Color.lerp(
+              baseBorderColor,
+              highlightBorderColor,
+              0.5 + (0.5 * pulseFactor),
+            )!;
+            currentBorderWidth = baseBorderWidth + (0.6 * pulseFactor);
           } else {
             currentTileColor = baseTileColor;
-            border = Border(
-              bottom: baseBottomBorder,
-              left: baseLeftBorder,
-            );
+            currentBorderColor = baseBorderColor;
+            currentBorderWidth = baseBorderWidth;
           }
 
           return Transform.scale(
             scale: scale,
             alignment: Alignment.center,
-            child: InkWell(
-              onTap: widget.onTap,
-              child: Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                decoration: BoxDecoration(
-                  color: currentTileColor,
-                  border: border,
-                  boxShadow: glowShadows,
+            child: Container(
+              decoration: BoxDecoration(
+                color: currentTileColor,
+                borderRadius: borderRadius,
+                border: Border.all(
+                  color: currentBorderColor,
+                  width: currentBorderWidth,
                 ),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // Nút checkbox tròn phong cách Todoist (đạt chuẩn tap target >= 48dp)
-                    IconButton(
-                      onPressed: widget.onToggle,
-                      constraints:
-                          const BoxConstraints(minWidth: 44, minHeight: 44),
-                      padding: EdgeInsets.zero,
-                      icon: Icon(
-                        widget.todo.isCompleted
-                            ? Icons.check_circle
-                            : Icons.radio_button_unchecked,
-                        color: widget.todo.isCompleted
-                            ? (isDark
-                                ? const Color(0xFF4CAF50)
-                                : AppTheme.completeColor)
-                            : (overdue
-                                ? AppTheme.overdueColor
-                                : (isDark
-                                    ? Colors.grey.shade500
-                                    : Colors.grey.shade500)),
-                        size: 22,
-                      ),
+                boxShadow: glowShadows,
+              ),
+              child: Material(
+                color: Colors.transparent,
+                child: InkWell(
+                  borderRadius: borderRadius,
+                  onTap: widget.onTap,
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 12,
                     ),
-                    const SizedBox(width: 8),
-                    // Nội dung công việc
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            widget.todo.title,
-                            style: TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.w500,
-                              color: titleColor,
-                              decoration: widget.todo.isCompleted
-                                  ? TextDecoration.lineThrough
-                                  : null,
-                            ),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // Nút checkbox tròn phong cách Todoist (đạt chuẩn tap target >= 48dp)
+                        IconButton(
+                          onPressed: widget.onToggle,
+                          constraints:
+                              const BoxConstraints(minWidth: 44, minHeight: 44),
+                          padding: EdgeInsets.zero,
+                          icon: Icon(
+                            widget.todo.isCompleted
+                                ? Icons.check_circle
+                                : Icons.radio_button_unchecked,
+                            color: widget.todo.isCompleted
+                                ? (isDark
+                                    ? const Color(0xFF4CAF50)
+                                    : AppTheme.completeColor)
+                                : (overdue
+                                    ? AppTheme.overdueColor
+                                    : (isDark
+                                        ? Colors.grey.shade500
+                                        : Colors.grey.shade500)),
+                            size: 22,
                           ),
-                          if (widget.todo.description != null &&
-                              widget.todo.description!.trim().isNotEmpty) ...[
-                            const SizedBox(height: 4),
-                            Text(
-                              widget.todo.description!.trim(),
-                              maxLines: 2,
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(
-                                fontSize: 13,
-                                color: descColor,
+                        ),
+                        const SizedBox(width: 8),
+                        // Nội dung công việc
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                widget.todo.title,
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w500,
+                                  color: titleColor,
+                                  decoration: widget.todo.isCompleted
+                                      ? TextDecoration.lineThrough
+                                      : null,
+                                ),
                               ),
-                            ),
-                          ],
-                          if (widget.todo.dueDate != null ||
-                              widget.isHighlighted ||
-                              widget.todo.isCompleted) ...[
-                            const SizedBox(height: 6),
-                            Wrap(
-                              crossAxisAlignment: WrapCrossAlignment.center,
-                              spacing: 8,
-                              runSpacing: 4,
-                              children: [
-                                if (widget.todo.dueDate != null)
-                                  _buildDueDateBadge(
-                                      context, overdue, badgeColor),
-                                if (overdue && !widget.todo.isCompleted)
-                                  _buildOverdueBadge(context, isDark),
-                                if (widget.todo.isCompleted)
-                                  _buildCompletedBadge(context, isDark),
-                                if (widget.isHighlighted)
-                                  _buildHighlightedBadge(context),
+                              if (widget.todo.description != null &&
+                                  widget.todo.description!.trim().isNotEmpty) ...[
+                                const SizedBox(height: 4),
+                                Text(
+                                  widget.todo.description!.trim(),
+                                  maxLines: 2,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(
+                                    fontSize: 13,
+                                    color: descColor,
+                                  ),
+                                ),
                               ],
-                            ),
-                          ],
-                        ],
-                      ),
+                              if (widget.todo.dueDate != null ||
+                                  widget.isHighlighted ||
+                                  widget.todo.isCompleted) ...[
+                                const SizedBox(height: 6),
+                                Wrap(
+                                  crossAxisAlignment: WrapCrossAlignment.center,
+                                  spacing: 8,
+                                  runSpacing: 4,
+                                  children: [
+                                    if (widget.todo.dueDate != null)
+                                      _buildDueDateBadge(
+                                          context, overdue, badgeColor),
+                                    if (overdue && !widget.todo.isCompleted)
+                                      _buildOverdueBadge(context, isDark),
+                                    if (widget.todo.isCompleted)
+                                      _buildCompletedBadge(context, isDark),
+                                    if (widget.isHighlighted)
+                                      _buildHighlightedBadge(context, isDark),
+                                  ],
+                                ),
+                              ],
+                            ],
+                          ),
+                        ),
+                        // Nút xóa trực tiếp trên mỗi mục công việc (giúp thao tác dễ dàng mà không phụ thuộc hoàn toàn vào vuốt)
+                        IconButton(
+                          key: ValueKey('todo_delete_button_${widget.todo.id}'),
+                          onPressed: widget.onDelete,
+                          tooltip: 'Delete task',
+                          constraints:
+                              const BoxConstraints(minWidth: 40, minHeight: 40),
+                          padding: EdgeInsets.zero,
+                          icon: Icon(
+                            Icons.delete_outline,
+                            size: 20,
+                            color: isDark
+                                ? Colors.grey.shade500
+                                : Colors.grey.shade400,
+                          ),
+                        ),
+                      ],
                     ),
-                    // Nút xóa trực tiếp trên mỗi mục công việc (giúp thao tác dễ dàng mà không phụ thuộc hoàn toàn vào vuốt)
-                    IconButton(
-                      key: ValueKey('todo_delete_button_${widget.todo.id}'),
-                      onPressed: widget.onDelete,
-                      tooltip: 'Delete task',
-                      constraints:
-                          const BoxConstraints(minWidth: 40, minHeight: 40),
-                      padding: EdgeInsets.zero,
-                      icon: Icon(
-                        Icons.delete_outline,
-                        size: 20,
-                        color:
-                            isDark ? Colors.grey.shade500 : Colors.grey.shade400,
-                      ),
-                    ),
-                  ],
+                  ),
                 ),
               ),
             ),
@@ -468,36 +470,43 @@ class _TodoItemTileState extends State<TodoItemTile>
     );
   }
 
-  /// Xây dựng huy hiệu Reminded màu đỏ khi click từ notification
-  Widget _buildHighlightedBadge(BuildContext context) {
+  /// Xây dựng huy hiệu Reminded tone vàng hổ phách khi click từ notification
+  Widget _buildHighlightedBadge(BuildContext context, bool isDark) {
+    final badgeColor =
+        isDark ? const Color(0xFFFFD54F) : const Color(0xFFB45309);
+    final badgeBg =
+        isDark ? const Color(0xFF423315) : const Color(0xFFFEF3C7);
+    final badgeBorder =
+        isDark ? const Color(0xFFFFB300) : const Color(0xFFF59E0B);
+
     return Container(
       padding: const EdgeInsets.symmetric(
         horizontal: 6,
         vertical: 2,
       ),
       decoration: BoxDecoration(
-        color: AppTheme.primaryColor.withAlpha(35),
+        color: badgeBg,
         borderRadius: BorderRadius.circular(4),
         border: Border.all(
-          color: AppTheme.primaryColor,
+          color: badgeBorder,
           width: 0.8,
         ),
       ),
-      child: const Row(
+      child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
           Icon(
             Icons.notifications_active,
             size: 12,
-            color: AppTheme.primaryColor,
+            color: badgeColor,
           ),
-          SizedBox(width: 4),
+          const SizedBox(width: 4),
           Text(
             'Reminded',
             style: TextStyle(
               fontSize: 11,
               fontWeight: FontWeight.bold,
-              color: AppTheme.primaryColor,
+              color: badgeColor,
             ),
           ),
         ],
