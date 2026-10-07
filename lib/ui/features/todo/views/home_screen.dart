@@ -103,38 +103,63 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
-  /// Đảo trạng thái hoàn thành công việc và hiển thị SnackBar kèm nút hoàn tác (Undo)
-  void _toggleTask(BuildContext context, Todo task) {
+  /// Hiển thị SnackBar hoàn tác (Undo) dạng nổi (floating) bo góc 10dp tương thích hoàn hảo Light & Dark mode
+  void _showUndoSnackBar(
+    BuildContext context, {
+    required String message,
+    required VoidCallback onUndo,
+  }) {
     final messenger = ScaffoldMessenger.of(context);
     messenger.hideCurrentSnackBar();
 
-    if (task.isCompleted) {
-      widget.viewModel.undoComplete(task.id);
-      messenger.showSnackBar(
-        SnackBar(
-          content: const Text('Task marked as active'),
-          duration: const Duration(seconds: 4),
-          action: SnackBarAction(
-            label: 'Undo',
-            onPressed: () {
-              widget.viewModel.completeTodo(task.id);
-            },
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    messenger.showSnackBar(
+      SnackBar(
+        content: Text(
+          message,
+          style: const TextStyle(
+            color: Colors.white,
+            fontSize: 14,
+            fontWeight: FontWeight.w500,
           ),
         ),
+        duration: const Duration(seconds: 4),
+        behavior: SnackBarBehavior.floating,
+        backgroundColor:
+            isDark ? const Color(0xFF2C2C2C) : const Color(0xFF202020),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(10.0),
+          side: BorderSide(
+            color: isDark ? const Color(0xFF444444) : Colors.transparent,
+            width: 0.8,
+          ),
+        ),
+        action: SnackBarAction(
+          label: 'Undo',
+          textColor:
+              isDark ? const Color(0xFFFF8A80) : const Color(0xFFFF6B6B),
+          onPressed: onUndo,
+        ),
+      ),
+    );
+  }
+
+  /// Đảo trạng thái hoàn thành công việc và hiển thị SnackBar kèm nút hoàn tác (Undo)
+  void _toggleTask(BuildContext context, Todo task) {
+    if (task.isCompleted) {
+      widget.viewModel.undoComplete(task.id);
+      _showUndoSnackBar(
+        context,
+        message: 'Task marked as active',
+        onUndo: () => widget.viewModel.completeTodo(task.id),
       );
     } else {
       widget.viewModel.completeTodo(task.id);
-      messenger.showSnackBar(
-        SnackBar(
-          content: const Text('Task marked as completed'),
-          duration: const Duration(seconds: 4),
-          action: SnackBarAction(
-            label: 'Undo',
-            onPressed: () {
-              widget.viewModel.undoComplete(task.id);
-            },
-          ),
-        ),
+      _showUndoSnackBar(
+        context,
+        message: 'Task marked as completed',
+        onUndo: () => widget.viewModel.undoComplete(task.id),
       );
     }
   }
@@ -142,20 +167,10 @@ class _HomeScreenState extends State<HomeScreen> {
   /// Xóa công việc và hiển thị SnackBar kèm nút hoàn tác (Undo)
   void _deleteTask(BuildContext context, Todo task) {
     widget.viewModel.deleteTodo(task.id);
-
-    final messenger = ScaffoldMessenger.of(context);
-    messenger.hideCurrentSnackBar();
-    messenger.showSnackBar(
-      SnackBar(
-        content: const Text('Task deleted'),
-        duration: const Duration(seconds: 4),
-        action: SnackBarAction(
-          label: 'Undo',
-          onPressed: () {
-            widget.viewModel.undoDelete(task);
-          },
-        ),
-      ),
+    _showUndoSnackBar(
+      context,
+      message: 'Task deleted',
+      onUndo: () => widget.viewModel.undoDelete(task),
     );
   }
 
@@ -209,6 +224,8 @@ class _HomeScreenState extends State<HomeScreen> {
         // Kiểm tra và tự động cuộn đến task được click từ notification
         _checkAndScrollToHighlighted(visibleTasks);
 
+        final isDark = Theme.of(context).brightness == Brightness.dark;
+
         return Scaffold(
           appBar: AppBar(
             title: const Text(
@@ -251,44 +268,41 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
                 ),
 
-                // Bộ chọn tab phân loại (Today, Upcoming, All)
+                // Bộ chọn tab phân loại (Today, Upcoming, All) với gap 8dp và bo góc 10dp đồng bộ
                 Padding(
                   padding: const EdgeInsets.symmetric(
                     horizontal: 16.0,
                     vertical: 6.0,
                   ),
-                  child: SizedBox(
-                    width: double.infinity,
-                    child: SegmentedButton<TodoFilter>(
-                      showSelectedIcon: false,
-                      segments: [
-                        ButtonSegment<TodoFilter>(
-                          value: TodoFilter.today,
-                          label: Text(
-                            'Today (${widget.viewModel.todayTasksCount})',
-                            style: const TextStyle(fontSize: 13),
-                          ),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: _buildFilterTabButton(
+                          label: 'Today (${widget.viewModel.todayTasksCount})',
+                          isSelected: widget.viewModel.currentFilter == TodoFilter.today,
+                          onTap: () => widget.viewModel.setFilter(TodoFilter.today),
+                          isDark: isDark,
                         ),
-                        ButtonSegment<TodoFilter>(
-                          value: TodoFilter.upcoming,
-                          label: Text(
-                            'Upcoming (${widget.viewModel.upcomingTasksCount})',
-                            style: const TextStyle(fontSize: 13),
-                          ),
+                      ),
+                      const SizedBox(width: 8.0),
+                      Expanded(
+                        child: _buildFilterTabButton(
+                          label: 'Upcoming (${widget.viewModel.upcomingTasksCount})',
+                          isSelected: widget.viewModel.currentFilter == TodoFilter.upcoming,
+                          onTap: () => widget.viewModel.setFilter(TodoFilter.upcoming),
+                          isDark: isDark,
                         ),
-                        ButtonSegment<TodoFilter>(
-                          value: TodoFilter.all,
-                          label: Text(
-                            'All (${widget.viewModel.allTasksCount})',
-                            style: const TextStyle(fontSize: 13),
-                          ),
+                      ),
+                      const SizedBox(width: 8.0),
+                      Expanded(
+                        child: _buildFilterTabButton(
+                          label: 'All (${widget.viewModel.allTasksCount})',
+                          isSelected: widget.viewModel.currentFilter == TodoFilter.all,
+                          onTap: () => widget.viewModel.setFilter(TodoFilter.all),
+                          isDark: isDark,
                         ),
-                      ],
-                      selected: {widget.viewModel.currentFilter},
-                      onSelectionChanged: (newSelection) {
-                        widget.viewModel.setFilter(newSelection.first);
-                      },
-                    ),
+                      ),
+                    ],
                   ),
                 ),
 
@@ -342,6 +356,73 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
         );
       },
+    );
+  }
+
+  /// Nút chọn bộ lọc (Today, Upcoming, All) với gap và bo góc 10dp đồng bộ với toàn bộ ứng dụng
+  Widget _buildFilterTabButton({
+    required String label,
+    required bool isSelected,
+    required VoidCallback onTap,
+    required bool isDark,
+  }) {
+    final Color backgroundColor;
+    final Color borderColor;
+    final Color textColor;
+
+    if (isSelected) {
+      backgroundColor = AppTheme.primaryColor;
+      borderColor = AppTheme.primaryColor;
+      textColor = Colors.white;
+    } else {
+      backgroundColor = isDark ? const Color(0xFF242424) : Colors.white;
+      borderColor = isDark ? const Color(0xFF383838) : const Color(0xFFE5E7EB);
+      textColor = isDark ? const Color(0xFFB0B0B0) : const Color(0xFF555555);
+    }
+
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 200),
+      curve: Curves.easeInOut,
+      height: 38,
+      decoration: BoxDecoration(
+        color: backgroundColor,
+        borderRadius: BorderRadius.circular(10.0),
+        border: Border.all(
+          color: borderColor,
+          width: isSelected ? 1.2 : 1.0,
+        ),
+        boxShadow: isSelected
+            ? [
+                BoxShadow(
+                  color: AppTheme.primaryColor.withAlpha(isDark ? 60 : 40),
+                  blurRadius: 6.0,
+                  offset: const Offset(0, 2),
+                ),
+              ]
+            : null,
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(10.0),
+          onTap: onTap,
+          child: Center(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 4.0),
+              child: Text(
+                label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontSize: 12.5,
+                  fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+                  color: textColor,
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
     );
   }
 }

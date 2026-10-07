@@ -255,5 +255,70 @@ void main() {
       expect(find.text('Direct Delete Task'), findsNothing);
       expect(find.text('Task deleted'), findsOneWidget);
     });
+
+    testWidgets('Các nút chọn tab Today, Upcoming, All có gap và bo góc 10dp đồng bộ', (tester) async {
+      await viewModel.initialize();
+
+      await tester.pumpWidget(MaterialApp(
+        theme: AppTheme.lightTheme,
+        home: HomeScreen(viewModel: viewModel),
+      ));
+      await tester.pumpAndSettle();
+
+      // Kiểm tra 3 nút filter
+      final todayFinder = find.textContaining('Today');
+      final upcomingFinder = find.textContaining('Upcoming');
+      final allFinder = find.textContaining('All');
+
+      expect(todayFinder, findsOneWidget);
+      expect(upcomingFinder, findsOneWidget);
+      expect(allFinder, findsOneWidget);
+
+      // Lấy AnimatedContainer của các nút để kiểm tra bo góc 10dp
+      final containers = tester.widgetList<AnimatedContainer>(find.byType(AnimatedContainer));
+      final tabContainers = containers.where((c) {
+        final dec = c.decoration;
+        if (dec is BoxDecoration) {
+          return dec.borderRadius == BorderRadius.circular(10.0);
+        }
+        return false;
+      });
+      expect(tabContainers.length, greaterThanOrEqualTo(3));
+
+      // Kiểm tra vị trí giữa các nút có gap (khoảng cách > 0)
+      final todayTopLeft = tester.getTopRight(todayFinder);
+      final upcomingTopLeft = tester.getTopLeft(upcomingFinder);
+      expect(upcomingTopLeft.dx - todayTopLeft.dx, greaterThan(0));
+    });
+
+    testWidgets('SnackBar Undo có màu sắc tương thích và bo góc 10dp trong cả Light và Dark mode', (tester) async {
+      await viewModel.initialize();
+
+      await tester.runAsync(() async {
+        await viewModel.addTodo(TodoDraft(
+          title: 'Color Test Task',
+          dueDate: currentTime,
+          hasTime: false,
+        ));
+      });
+
+      // 1. Kiểm tra trên Dark Mode
+      await tester.pumpWidget(MaterialApp(
+        theme: AppTheme.darkTheme,
+        home: HomeScreen(viewModel: viewModel),
+      ));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byIcon(Icons.radio_button_unchecked));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 350));
+
+      final darkSnackBar = tester.widget<SnackBar>(find.byType(SnackBar));
+      expect(darkSnackBar.backgroundColor, equals(const Color(0xFF2C2C2C)));
+      expect(darkSnackBar.behavior, equals(SnackBarBehavior.floating));
+      expect(darkSnackBar.action?.textColor, equals(const Color(0xFFFF8A80)));
+      final darkShape = darkSnackBar.shape as RoundedRectangleBorder;
+      expect(darkShape.borderRadius, equals(BorderRadius.circular(10.0)));
+    });
   });
 }

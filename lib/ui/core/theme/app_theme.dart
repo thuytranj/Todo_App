@@ -43,6 +43,19 @@ class AppTheme {
         backgroundColor: Colors.white,
         surfaceTintColor: Colors.transparent,
       ),
+      snackBarTheme: SnackBarThemeData(
+        behavior: SnackBarBehavior.floating,
+        backgroundColor: const Color(0xFF202020),
+        contentTextStyle: const TextStyle(
+          color: Colors.white,
+          fontSize: 14,
+          fontWeight: FontWeight.w500,
+        ),
+        actionTextColor: const Color(0xFFFF6B6B),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(10.0),
+        ),
+      ),
     );
   }
 
@@ -81,6 +94,20 @@ class AppTheme {
         elevation: const WidgetStatePropertyAll(1.0),
         backgroundColor: const WidgetStatePropertyAll(Color(0xFF2A2A2A)),
         hintStyle: WidgetStatePropertyAll(TextStyle(color: Colors.grey.shade400)),
+      ),
+      snackBarTheme: SnackBarThemeData(
+        behavior: SnackBarBehavior.floating,
+        backgroundColor: const Color(0xFF2C2C2C),
+        contentTextStyle: const TextStyle(
+          color: Colors.white,
+          fontSize: 14,
+          fontWeight: FontWeight.w500,
+        ),
+        actionTextColor: const Color(0xFFFF8A80),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(10.0),
+          side: const BorderSide(color: Color(0xFF444444), width: 0.8),
+        ),
       ),
     );
   }
