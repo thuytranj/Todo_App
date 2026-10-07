@@ -99,6 +99,73 @@ void main() {
       // Kiểm tra hiển thị huy hiệu Reminded và icon thông báo
       expect(find.text('Reminded'), findsOneWidget);
       expect(find.byIcon(Icons.notifications_active), findsOneWidget);
+
+      // 1. Tiến tới đỉnh xung nhịp (pulse peak tại ~500ms): Scale nhẹ > 1.0 (dao động đến ~1.025)
+      await tester.pump(const Duration(milliseconds: 500));
+      final transforms = tester.widgetList<Transform>(find.byType(Transform));
+      final activeScales = transforms.where(
+        (t) => t.transform.storage[0] > 1.005 && t.transform.storage[0] <= 1.03,
+      );
+      expect(activeScales, isNotEmpty);
+
+      // 2. Chạy hết chu kỳ 3 giây (thêm 2500ms): Hiệu ứng dừng hoàn toàn, scale trở về 1.0
+      await tester.pump(const Duration(milliseconds: 2500));
+      final settledTransforms = tester.widgetList<Transform>(find.byType(Transform));
+      final remainingActiveScales = settledTransforms.where(
+        (t) => t.transform.storage[0] > 1.0001,
+      );
+      expect(remainingActiveScales, isEmpty);
+    });
+
+    testWidgets('Hiệu ứng Fade/Glow tạo BoxShadow phát sáng và dừng hoàn toàn sau 3s', (tester) async {
+      final todo = Todo(
+        id: 7,
+        title: 'Glow Task',
+        dueDate: now.add(const Duration(hours: 1)),
+        hasTime: true,
+        createdAt: now,
+      );
+
+      await tester.pumpWidget(MaterialApp(
+        home: Scaffold(
+          body: TodoItemTile(
+            todo: todo,
+            now: now,
+            isHighlighted: true,
+            onToggle: () {},
+            onTap: () {},
+            onDelete: () {},
+          ),
+        ),
+      ));
+
+      // Tại thời điểm đỉnh sóng (500ms), có BoxShadow phát sáng
+      await tester.pump(const Duration(milliseconds: 500));
+      final containerFinder = find.descendant(
+        of: find.byType(Transform),
+        matching: find.byType(Container),
+      );
+      final containers = tester.widgetList<Container>(containerFinder);
+      final glowingContainers = containers.where((c) {
+        final dec = c.decoration;
+        if (dec is BoxDecoration) {
+          return dec.boxShadow != null && dec.boxShadow!.isNotEmpty;
+        }
+        return false;
+      });
+      expect(glowingContainers, isNotEmpty);
+
+      // Chạy hết 3 giây: BoxShadow không còn phát sáng, dừng hoàn toàn
+      await tester.pump(const Duration(milliseconds: 2500));
+      final settledContainers = tester.widgetList<Container>(containerFinder);
+      final remainingGlowing = settledContainers.where((c) {
+        final dec = c.decoration;
+        if (dec is BoxDecoration) {
+          return dec.boxShadow != null && dec.boxShadow!.isNotEmpty;
+        }
+        return false;
+      });
+      expect(remainingGlowing, isEmpty);
     });
 
     testWidgets('Hiển thị chuẩn xác trên nền Dark Mode không bị chữ trắng nền trắng', (tester) async {
